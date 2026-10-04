@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ltts — локальный синтез речи</title>
+<style>
+  /* Minimalism & Swiss: сетка, воздух, контраст. Палитра «waveform blue + recording red». Шрифты системные — офлайн. */
+  :root {
+    --bg: #F8FAFC; --surface: #FFFFFF; --surface-2: #F1F5F9; --border: #E2E8F0; --border-strong: #CBD5E1;
+    --text: #0F172A; --muted: #475569; --faint: #64748B;
+    --accent: #2563EB; --accent-hover: #1D4ED8; --on-accent: #FFFFFF; --accent-soft: #EFF6FF; --accent-text: #1D4ED8;
+    --rec: #DC2626; --ok: #15803D; --warn: #B45309; --warn-soft: #FFFBEB; --bad: #B91C1C; --bad-soft: #FEF2F2;
+    --wave: #CBD5E1; --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 1px 3px rgba(15, 23, 42, .08);
+    --ring: 0 0 0 3px rgba(37, 99, 235, .35);
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --r: 12px; --r-sm: 8px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F172A; --surface: #1B2336; --surface-2: #232C40; --border: #2B3549; --border-strong: #3B4659;
+      --text: #F8FAFC; --muted: #A5B1C2; --faint: #8391A7;
+      --accent: #60A5FA; --accent-hover: #93C5FD; --on-accent: #0F172A; --accent-soft: rgba(96, 165, 250, .12); --accent-text: #93C5FD;
+      --rec: #F87171; --ok: #4ADE80; --warn: #FBBF24; --warn-soft: rgba(251, 191, 36, .1); --bad: #F87171; --bad-soft: rgba(248, 113, 113, .1);
+      --wave: #3B4659; --shadow: 0 1px 2px rgba(0, 0, 0, .4); --ring: 0 0 0 3px rgba(96, 165, 250, .45);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F172A; --surface: #1B2336; --surface-2: #232C40; --border: #2B3549; --border-strong: #3B4659;
+    --text: #F8FAFC; --muted: #A5B1C2; --faint: #8391A7;
+    --accent: #60A5FA; --accent-hover: #93C5FD; --on-accent: #0F172A; --accent-soft: rgba(96, 165, 250, .12); --accent-text: #93C5FD;
+    --rec: #F87171; --ok: #4ADE80; --warn: #FBBF24; --warn-soft: rgba(251, 191, 36, .1); --bad: #F87171; --bad-soft: rgba(248, 113, 113, .1);
+    --wave: #3B4659; --shadow: 0 1px 2px rgba(0, 0, 0, .4); --ring: 0 0 0 3px rgba(96, 165, 250, .45);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: none; box-shadow: var(--ring); }
+  .icon { width: 18px; height: 18px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 24px 64px; }
+
+  /* ---------- шапка ---------- */
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+  .logo { width: 36px; height: 36px; border-radius: 10px; background: var(--text); color: var(--bg); display: grid; place-items: center; position: relative; }
+  .logo::after { content: ""; position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--rec); border: 2px solid var(--bg); }
+  .brand h1 { font-size: 20px; line-height: 1.1; margin: 0; letter-spacing: -.02em; }
+  .brand p { margin: 0; font-size: 13px; color: var(--faint); }
+  .status { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--surface); font-size: 13px; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
+  .pill.ok .dot { background: var(--ok); } .pill.warn .dot { background: var(--warn); } .pill.bad .dot { background: var(--bad); }
+  .icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); transition: color .15s, border-color .15s; }
+  .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+
+  /* ---------- раскладка ---------- */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto 1fr; grid-template-areas: "editor aside" "history aside";
+    column-gap: 24px; align-items: start; }
+  .area-editor { grid-area: editor; } .area-history { grid-area: history; } .panel { grid-area: aside; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }
+
+  /* редактор */
+  .editor { display: flex; flex-direction: column; }
+  .editor textarea { min-height: 260px; resize: vertical; border: 0; outline: 0; background: transparent; padding: 20px 20px 8px;
+    font-size: 18px; line-height: 1.6; border-radius: var(--r) var(--r) 0 0; }
+  .editor textarea::placeholder { color: var(--faint); }
+  .editor:focus-within { border-color: var(--border-strong); }
+  .notice { margin: 0 20px 8px; padding: 8px 12px; border-radius: var(--r-sm); background: var(--warn-soft); color: var(--warn);
+    font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .notice > span { flex: 1 1 200px; }
+  .notice button { background: none; border: 0; padding: 0; color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; font-size: 14px; }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 20px; border-top: 1px solid var(--border); }
+  .bar .meta { margin-right: auto; font: 13px var(--mono); color: var(--faint); }
+  kbd { font: 12px var(--mono); padding: 2px 6px; border-radius: 5px; border: 1px solid var(--border); border-bottom-width: 2px; background: var(--surface-2); color: var(--muted); }
+  .cta { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 20px; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--on-accent); font-weight: 600; transition: background .15s, transform .1s; white-space: nowrap; }
+  .cta:hover { background: var(--accent-hover); }
+  .cta:active { transform: translateY(1px); }
+  .cta[aria-busy="true"] { cursor: progress; opacity: .85; }
+  .spin { animation: spin .9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .progress { margin: 12px 0 0; padding: 12px 16px; display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--muted); }
+  .progress .track { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; position: relative; }
+  .progress .track::after { content: ""; position: absolute; inset: 0; width: 35%; background: var(--accent); border-radius: 2px; animation: slide 1.4s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+  .progress time { font: 13px var(--mono); color: var(--faint); }
+  .error { margin-top: 12px; padding: 12px 16px; border-radius: var(--r); background: var(--bad-soft); color: var(--bad); font-size: 14px;
+    display: flex; gap: 10px; align-items: flex-start; white-space: pre-wrap; border: 1px solid transparent; }
+
+  /* панель настроек */
+  .panel { padding: 20px; display: grid; gap: 20px; position: sticky; top: 16px; }
+  .field > .label { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; color: var(--muted);
+    margin-bottom: 8px; letter-spacing: .01em; }
+  .field > .label output, .field > .label span { font: 13px var(--mono); font-weight: 400; color: var(--faint); }
+  .seg { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; }
+  .seg button { flex: 1; min-height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--muted);
+    font-size: 14px; transition: background .15s, color .15s; }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+
+  .voices { max-height: 340px; overflow-y: auto; margin: 0 -6px; padding: 0 6px; scrollbar-width: thin; }
+  .group-title { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: 8px 2px 6px; font-size: 12px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .06em; color: var(--faint); display: flex; justify-content: space-between; gap: 8px; }
+  .group-title small { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--warn); }
+  .voice { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border-radius: var(--r-sm);
+    border: 1px solid transparent; cursor: pointer; transition: background .15s, border-color .15s; }
+  .voice:hover { background: var(--surface-2); }
+  .voice:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); }
+  .voice:has(input:focus-visible) { box-shadow: var(--ring); }
+  .voice:has(input:disabled) { opacity: .5; cursor: not-allowed; }
+  .voice input { position: absolute; opacity: 0; pointer-events: none; }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--border-strong); flex: none; display: grid; place-items: center; }
+  .voice:has(input:checked) .radio { border-color: var(--accent); }
+  .voice:has(input:checked) .radio::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .voice .name { font: 500 14px var(--mono); }
+  .voice .tags { margin-left: auto; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--faint); }
+  .tag { padding: 1px 7px; border-radius: 999px; background: var(--surface-2); color: var(--muted); font-size: 11px; font-weight: 500; }
+  .tag.def { background: var(--accent-soft); color: var(--accent-text); }
+  .tag.dl { color: var(--faint); display: inline-flex; align-items: center; gap: 3px; }
+  .tag.dl .icon { width: 12px; height: 12px; }
+  .empty-voices { padding: 16px 8px; font-size: 14px; color: var(--faint); text-align: center; }
+  .label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .label-row .label { margin: 0; }
+  .link-btn { display: inline-flex; gap: 4px; align-items: center; min-height: 32px; background: none; border: 0; padding: 4px 8px; border-radius: 8px;
+    color: var(--accent-text); font-size: 13px; font-weight: 600; transition: background .15s; }
+  .link-btn:hover { background: var(--accent-soft); }
+  .link-btn .icon { width: 15px; height: 15px; }
+  .voice .del { width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: none; color: var(--faint); border-radius: 6px; flex: none; }
+  .voice .del:hover { color: var(--bad); background: var(--bad-soft); }
+  .voice .del .icon { width: 15px; height: 15px; }
+  .clone-empty { padding: 8px 10px 4px; font-size: 13px; color: var(--faint); }
+  .switch { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); cursor: pointer; margin-top: 12px; padding: 8px 10px;
+    border-radius: var(--r-sm); background: var(--surface-2); }
+  .switch input { appearance: none; width: 36px; height: 20px; border-radius: 999px; background: var(--border-strong); position: relative; transition: background .15s; cursor: pointer; flex: none; margin: 0; }
+  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { transform: translateX(16px); }
+  .switch input:disabled { opacity: .45; cursor: not-allowed; }
+  .switch small { display: block; font-size: 12px; color: var(--faint); }
+
+  /* диалог клонирования */
+  dialog { border: 1px solid var(--border); border-radius: 16px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--text);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
+  dialog::backdrop { background: rgba(15, 23, 42, .45); }
+  .dlg { padding: 20px; display: grid; gap: 16px; }
+  .dlg-head { display: flex; justify-content: space-between; align-items: center; }
+  .dlg-head h3 { margin: 0; font-size: 18px; }
+  .dlg .muted { margin: 0; font-size: 13px; color: var(--faint); }
+  .script { margin: 0; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 15px; line-height: 1.55; }
+  .rec-row { display: flex; align-items: center; gap: 12px; }
+  .rec { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--rec); color: #fff; font-weight: 600; }
+  .rec .icon { width: 16px; height: 16px; }
+  .rec[aria-pressed="true"] { background: var(--text); color: var(--bg); }
+  .meter { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
+  .rec-row time { font: 13px var(--mono); color: var(--faint); min-width: 3.5em; text-align: right; }
+  .dlg audio { width: 100%; height: 36px; }
+  .dlg input[type=text], .dlg textarea { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); font-size: 15px; resize: vertical; }
+  .dlg input[type=file] { font-size: 14px; color: var(--muted); }
+  .f-label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  .f-label small { font-weight: 400; color: var(--faint); }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); cursor: pointer; }
+  .check input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; }
+  .dlg .error { margin: 0; }
+
+  input[type=range] { width: 100%; accent-color: var(--accent); height: 24px; }
+  .range-scale { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--faint); margin-top: -2px; }
+
+  /* история */
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 32px 0 12px; }
+  .section-head h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin: 0; }
+  .section-head span { font: 13px var(--mono); color: var(--faint); }
+  .history { display: grid; gap: 12px; }
+  .clip { padding: 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; align-items: center; }
+  .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center;
+    transition: background .15s, transform .1s; }
+  .play:hover { background: var(--accent-hover); }
+  .play:active { transform: scale(.96); }
+  .play .icon { width: 18px; height: 18px; }
+  .play svg.icon[data-i="play"] { fill: currentColor; margin-left: 2px; }
+  .play svg.icon[data-i="pause"] { fill: currentColor; }
+  .wave { position: relative; height: 44px; cursor: pointer; border-radius: 6px; }
+  .wave canvas { width: 100%; height: 100%; display: block; }
+  .clip .text { grid-column: 1 / -1; font-size: 15px; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .clip .foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .clip .info { font: 12px var(--mono); color: var(--faint); margin-right: auto; display: flex; gap: 6px 12px; flex-wrap: wrap; }
+  .clip .info b { color: var(--muted); font-weight: 500; }
+  .clip .info .swap { color: var(--warn); }
+  .ghost { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: var(--r-sm); border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); font-size: 13px; text-decoration: none; transition: color .15s, border-color .15s; }
+  .ghost:hover { color: var(--text); border-color: var(--border-strong); }
+  .ghost .icon { width: 15px; height: 15px; }
+  .empty { padding: 32px 20px; text-align: center; color: var(--faint); font-size: 14px; }
+  .empty .icon { width: 28px; height: 28px; color: var(--border-strong); margin-bottom: 8px; }
+
+  details.agents { margin-top: 32px; }
+  details.agents summary { cursor: pointer; display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; list-style: none; }
+  details.agents summary::-webkit-details-marker { display: none; }
+  details.agents pre { margin: 12px 0 0; padding: 16px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--border);
+    font: 13px/1.6 var(--mono); color: var(--muted); overflow-x: auto; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; grid-template-areas: "editor" "aside" "history"; }
+    .panel { position: static; margin-top: 16px; }
+    .voices { max-height: 300px; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding: 16px 16px 48px; }
+    .brand p { display: none; }
+    header { gap: 12px; }
+    .status { order: 3; width: 100%; }
+    .editor textarea { min-height: 180px; padding: 16px; font-size: 17px; }
+    .bar { padding: 12px; flex-wrap: wrap; }
+    .bar .hint { display: none; }
+    .cta { flex: 1; justify-content: center; }
+    .notice { margin: 0 16px 8px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo" aria-hidden="true"><svg class="icon" data-i="wave"></svg></div>
+      <div><h1>ltts</h1><p>Локальный синтез речи · ничего не уходит в интернет</p></div>
+    </div>
+    <div class="status" id="engines" aria-label="Состояние движков"></div>
+    <button class="icon-btn" id="theme" type="button" aria-label="Тема"></button>
+  </header>
+
+  <div class="layout">
+    <main class="area-editor">
+      <section class="card editor" aria-label="Текст">
+        <label for="text" class="sr-only">Текст для озвучки</label>
+        <textarea id="text" placeholder="Напишите или вставьте текст…" autofocus>Привет! Это локальный синтез речи — ничего не уходит в интернет.</textarea>
+        <div class="notice" id="hint" hidden></div>
+        <div class="bar">
+          <span class="meta" id="count" aria-live="polite"></span>
+          <span class="hint meta" aria-hidden="true"><kbd>⌘</kbd> <kbd>Enter</kbd></span>
+          <button class="cta" id="go" type="button"><svg class="icon" data-i="wave"></svg><span>Озвучить</span></button>
+        </div>
+      </section>
+
+      <div class="card progress" id="progress" role="status" hidden>
+        <span id="progressText"></span><div class="track" aria-hidden="true"></div><time id="elapsed">0:00</time>
+      </div>
+      <div class="error" id="err" role="alert" hidden></div>
+    </main>
+
+    <section class="area-history" aria-label="История">
+      <div class="section-head"><h2>История</h2><span id="histCount"></span></div>
+      <div class="history" id="history"></div>
+
+      <details class="agents">
+        <summary><svg class="icon" data-i="terminal"></svg>Для агентов и скриптов</summary>
+        <pre>ltts say "Привет" --play
+ltts say "Hello there" --json            # английский — сам возьмёт английский голос
+echo "текст" | ltts say -v piper:denis -o out.mp3 --json
+claude mcp add ltts -- ltts mcp
+
+curl -s localhost:8765/v1/audio/speech -H 'Content-Type: application/json' \
+  -d '{"model":"silero","input":"Привет","voice":"xenia"}' -o out.mp3</pre>
+      </details>
+    </section>
+
+    <aside class="card panel" aria-label="Настройки голоса">
+      <div class="field">
+        <div class="label" id="langLabel">Язык</div>
+        <div class="seg" id="langSeg" role="group" aria-labelledby="langLabel">
+          <button type="button" data-v="ru">Русский</button><button type="button" data-v="en">English</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label" id="genderLabel">Пол</div>
+        <div class="seg" id="genderSeg" role="group" aria-labelledby="genderLabel">
+          <button type="button" data-v="all">Все</button><button type="button" data-v="female">Женский</button><button type="button" data-v="male">Мужской</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label-row"><div class="label" id="voiceLabel">Голос <span id="voiceCount"></span></div>
+          <button type="button" class="link-btn" id="cloneOpen" hidden><svg class="icon" data-i="plus"></svg>Клонировать голос</button></div>
+        <div class="voices" id="voices" role="radiogroup" aria-labelledby="voiceLabel"><div class="empty-voices">Загружаю голоса…</div></div>
+        <label class="switch" id="hqRow" hidden><input type="checkbox" id="hq"><span>HQ · 48 кГц<small id="hqNote">VoxCPM2 — чище звук, медленнее</small></span></label>
+      </div>
+      <div class="field">
+        <label class="label" for="speed">Скорость <output id="speedv" for="speed">1.00×</output></label>
+        <input id="speed" type="range" min="0.5" max="2" step="0.05" value="1">
+        <div class="range-scale" aria-hidden="true"><span>0.5×</span><span>1×</span><span>2×</span></div>
+      </div>
+      <div class="field">
+        <div class="label" id="fmtLabel">Формат</div>
+        <div class="seg" id="formatSeg" role="group" aria-labelledby="fmtLabel">
+          <button type="button" data-v="wav">wav</button><button type="button" data-v="mp3">mp3</button><button type="button" data-v="ogg">ogg</button><button type="button" data-v="flac">flac</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<dialog id="cloneDlg" aria-labelledby="cloneTitle">
+  <div class="dlg">
+    <div class="dlg-head"><h3 id="cloneTitle">Клонировать голос</h3>
+      <button type="button" class="icon-btn" id="cloneClose" aria-label="Закрыть"><svg class="icon" data-i="x"></svg></button></div>
+    <div class="seg" id="srcSeg" role="group" aria-label="Источник образца">
+      <button type="button" data-v="rec">Записать</button><button type="button" data-v="file">Загрузить файл</button>
+    </div>
+    <div id="recPane">
+      <p class="muted">Прочитайте вслух обычным голосом, в тихой комнате (10–15 секунд):</p>
+      <p class="script" id="script"></p>
+      <div class="rec-row" style="margin-top:12px">
+        <button type="button" class="rec" id="recBtn" aria-pressed="false"></button>
+        <div class="meter" aria-hidden="true"><i id="meter"></i></div><time id="recTime">0:00</time>
+      </div>
+      <audio id="recPreview" controls hidden></audio>
+    </div>
+    <div id="filePane" hidden>
+      <input type="file" id="cloneFile" accept="audio/*,.wav,.mp3,.flac,.ogg">
+      <p class="muted" style="margin-top:6px">wav, mp3, flac или ogg · 8–20 секунд чистой речи без музыки и шума</p>
+    </div>
+    <div><label class="f-label" for="cloneName">Имя голоса</label><input type="text" id="cloneName" maxlength="40" placeholder="например, Никита"></div>
+    <div><div class="f-label" id="cgLabel">Пол <small>— для фильтра</small></div>
+      <div class="seg" id="cloneGender" role="group" aria-labelledby="cgLabel">
+        <button type="button" data-v="">Не указан</button><button type="button" data-v="female">Женский</button><button type="button" data-v="male">Мужской</button></div></div>
+    <div><label class="f-label" for="cloneText">Что сказано в записи <small>— нужно для HQ, улучшает похожесть</small></label>
+      <textarea id="cloneText" rows="2" placeholder="необязательно"></textarea></div>
+    <label class="check"><input type="checkbox" id="consent">Это мой голос, или у меня есть согласие его владельца</label>
+    <div class="error" id="cloneErr" role="alert" hidden></div>
+    <div class="dlg-foot"><button type="button" class="ghost" id="cloneCancel">Отмена</button>
+      <button type="button" class="cta" id="cloneSave"><span>Сохранить голос</span></button></div>
+  </div>
+</dialog>
+
+<script>
+// ---------- иконки (Lucide, MIT) ----------
+const ICONS = {
+  wave: '<path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+  reuse: '<polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+  terminal: '<polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  auto: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/>',
+  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>',
+  stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  build: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+};
+const icon = (name, cls = "") => `<svg class="icon ${cls}" data-i="${name}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+function hydrateIcons(root = document) {
+  root.querySelectorAll("svg.icon[data-i]:not([viewBox])").forEach((s) => {
+    s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true"); s.innerHTML = ICONS[s.dataset.i];
+  });
+}
+hydrateIcons();
+
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("ltts." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("ltts." + k, JSON.stringify(v)); } catch {} },
+};
+const ENGINE_TITLES = { silero: "Silero", piper: "Piper", rhvoice: "RHVoice", kokoro: "Kokoro" };
+const PILLS = { ...ENGINE_TITLES, clone: "Клоны" };
+// что качается при первом использовании — для понятного прогресса
+const FIRST_USE = {
+  kokoro: "Скачиваю Kokoro (~350 МБ)",
+  clone: "Скачиваю модель клонирования OmniVoice (~1.5 ГБ)",
+  clonehq: "Скачиваю модель HQ VoxCPM2 (~3 ГБ)",
+};
+const LANG_NAMES = { ru: "русском", en: "английском" };
+const GENDER = { female: "жен.", male: "муж." };
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+document.querySelector(".hint kbd").textContent = isMac ? "⌘" : "Ctrl";
+
+const state = {
+  voices: [], defaults: {}, engines: {}, clones: {},
+  lang: store.get("lang", "ru"), gender: store.get("gender", "all"), format: store.get("format", "wav"),
+};
+
+// ---------- тема: авто → светлая → тёмная ----------
+const THEMES = [["auto", "Тема: как в системе"], ["light", "Тема: светлая"], ["dark", "Тема: тёмная"]];
+function applyTheme(t) {
+  if (t === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", t);
+  const label = THEMES.find(([k]) => k === t)[1];
+  $("theme").innerHTML = icon(t === "auto" ? "auto" : t === "light" ? "sun" : "moon");
+  $("theme").setAttribute("aria-label", label); $("theme").title = label;
+}
+let theme = store.get("theme", "auto");
+applyTheme(theme);
+$("theme").onclick = () => { theme = THEMES[(THEMES.findIndex(([k]) => k === theme) + 1) % 3][0]; store.set("theme", theme); applyTheme(theme); redrawAll(); };
+
+// ---------- сегментированные переключатели ----------
+function bindSeg(id, key, onChange) {
+  const seg = $(id);
+  const sync = () => seg.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === state[key])));
+  seg.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b || b.dataset.v === state[key]) return;
+    state[key] = b.dataset.v; store.set(key, state[key]); sync(); onChange?.();
+  });
+  sync();
+  return sync;
+}
+const syncLang = bindSeg("langSeg", "lang", () => { renderVoices(); updateHint(); });
+bindSeg("genderSeg", "gender", renderVoices);
+bindSeg("formatSeg", "format");
+
+// ---------- данные ----------
+async function load() {
+  const [v, s, c] = await Promise.all(["/api/voices", "/api/status", "/api/clones"].map((u) => fetch(u).then((r) => r.json())));
+  Object.assign(state, { voices: v.voices, defaults: v.defaults, engines: s.engines,
+    clones: Object.fromEntries(c.clones.map((x) => [x.slug, x])) });
+  $("cloneOpen").hidden = engineState("clone") === "bad";
+  renderEngines(); renderVoices();
+}
+const engineState = (n) => { const e = state.engines[n] || {}; return e.ok ? "ok" : e.installable ? "warn" : "bad"; };
+
+function renderEngines() {
+  const label = { ok: "работает", warn: "соберётся при первом использовании", bad: "недоступен" };
+  $("engines").innerHTML = Object.keys(PILLS).map((n) => {
+    const st = engineState(n), e = state.engines[n] || {};
+    const title = (e.hint || label[st]).replace(/"/g, "&quot;");
+    return `<span class="pill ${st}" title="${title}"><span class="dot" aria-hidden="true"></span>${PILLS[n]}<span class="sr-only">: ${label[st]}</span></span>`;
+  }).join("");
+}
+
+function selectedVoice() { return document.querySelector('#voices input[name="voice"]:checked'); }
+
+function renderVoices() {
+  const box = $("voices");
+  const { lang, gender } = state;
+  const def = state.defaults[lang];
+  const saved = store.get("voice." + lang, def);
+  let html = "", total = 0;
+  const pass = (v) => gender === "all" || v.gender === gender;
+  // «Мои голоса» — клоны говорят на любом языке, поэтому видны в обеих вкладках
+  if (engineState("clone") !== "bad") {
+    const mine = state.voices.filter((v) => v.engine === "clone" && pass(v));
+    html += '<div class="group-title">Мои голоса</div>';
+    if (!mine.length) html += `<div class="clone-empty">${Object.keys(state.clones).length ? "Нет клонов с этим полом" : "Пока нет — нажмите «Клонировать голос»"}</div>`;
+    for (const v of mine) {
+      total++;
+      const tags = [v.installed ? "" : `<span class="tag dl" title="Модель скачается при первом использовании">${icon("download")}скачать</span>`,
+        v.gender ? `<span>${GENDER[v.gender]}</span>` : ""].join("");
+      const name = (state.clones[v.name]?.name || v.name).replace(/</g, "&lt;");
+      html += `<label class="voice"><input type="radio" name="voice" value="${v.id}" data-pending="${v.installed ? "" : "download"}">
+        <span class="radio" aria-hidden="true"></span><span class="name">${name}</span><span class="tags">${tags}
+        <button type="button" class="del" data-slug="${v.name}" aria-label="Удалить голос ${name}" title="Удалить">${icon("trash")}</button></span></label>`;
+    }
+  }
+  for (const eng of Object.keys(ENGINE_TITLES)) {
+    const list = state.voices.filter((v) => v.engine === eng && v.lang === lang && pass(v));
+    if (!list.length) continue;
+    const st = engineState(eng);
+    const note = st === "warn" ? "<small>соберётся ~2 мин</small>" : st === "bad" ? "<small>недоступен</small>" : "";
+    html += `<div class="group-title">${ENGINE_TITLES[eng]}${note}</div>`;
+    for (const v of list) {
+      total++;
+      const pending = st === "warn" ? "build" : v.installed ? "" : "download";
+      const tags = [
+        v.id === def ? '<span class="tag def">по умолч.</span>' : "",
+        pending ? `<span class="tag dl" title="${pending === "build" ? "Соберётся при первом использовании" : "Скачается при первом использовании"}">${icon(pending === "build" ? "build" : "download")}${pending === "build" ? "сборка" : "скачать"}</span>` : "",
+        v.gender ? `<span>${GENDER[v.gender]}</span>` : "",
+      ].join("");
+      html += `<label class="voice"><input type="radio" name="voice" value="${v.id}" data-pending="${pending}" ${st === "bad" ? "disabled" : ""}>
+        <span class="radio" aria-hidden="true"></span><span class="name">${v.name}</span><span class="tags">${tags}</span></label>`;
+    }
+  }
+  box.innerHTML = html || '<div class="empty-voices">Нет голосов под этот фильтр</div>';
+  $("voiceCount").textContent = total ? String(total) : "";
+  const inputs = [...box.querySelectorAll("input:not(:disabled)")];
+  const pick = inputs.find((i) => i.value === saved) || inputs.find((i) => i.value === def) || inputs[0];
+  if (pick) {
+    pick.checked = true;
+    // прокручиваем только список голосов, не страницу
+    const row = pick.closest(".voice"), top = row.offsetTop - box.offsetTop;
+    if (top < box.scrollTop || top + row.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top - box.clientHeight / 2;
+  }
+  updateHq();
+}
+$("voices").addEventListener("change", (e) => {
+  if (e.target.name === "voice") { store.set("voice." + state.lang, e.target.value); updateHq(); }
+});
+$("voices").addEventListener("click", async (e) => {
+  const del = e.target.closest(".del");
+  if (!del) return;
+  e.preventDefault();
+  const c = state.clones[del.dataset.slug];
+  if (!confirm(`Удалить голос «${c?.name || del.dataset.slug}»? Образец будет удалён с диска.`)) return;
+  await fetch(`/api/clones/${encodeURIComponent(del.dataset.slug)}`, { method: "DELETE" });
+  load();
+});
+
+// HQ (VoxCPM2, 48 кГц) — только для клонов и только если у образца есть текст
+function updateHq() {
+  const v = selectedVoice()?.value || "";
+  const row = $("hqRow"), cb = $("hq");
+  if (!v.startsWith("clone:")) { row.hidden = true; return; }
+  const c = state.clones[v.slice(6)];
+  row.hidden = false;
+  cb.disabled = !c?.text;
+  if (cb.disabled) cb.checked = false;
+  else cb.checked = store.get("hq", false);
+  $("hqNote").textContent = cb.disabled ? "нужен текст образца — пересоздайте голос с текстом" : "VoxCPM2 — чище звук, медленнее";
+}
+$("hq").addEventListener("change", () => store.set("hq", $("hq").checked));
+
+// ---------- подсказка про язык ----------
+function detectLang(text) {
+  const cyr = (text.match(/[А-Яа-яЁё]/g) || []).length, lat = (text.match(/[A-Za-z]/g) || []).length;
+  if (!cyr && !lat) return null;
+  return lat && cyr * 10 < lat ? "en" : "ru";
+}
+function updateHint() {
+  const hint = $("hint"), detected = detectLang($("text").value);
+  if (!detected || detected === state.lang) { hint.hidden = true; return; }
+  hint.innerHTML = `${icon("alert")}<span>Текст на ${LANG_NAMES[detected]} — голос подберётся сам.</span><button type="button">Показать ${detected === "en" ? "английские" : "русские"} голоса</button>`;
+  hint.querySelector("button").onclick = () => { state.lang = detected; store.set("lang", detected); syncLang(); renderVoices(); updateHint(); };
+  hint.hidden = false;
+}
+function updateCount() { const n = $("text").value.length; $("count").textContent = `${n} ${n % 10 === 1 && n % 100 !== 11 ? "символ" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? "символа" : "символов"}`; }
+
+// ---------- история с волной ----------
+const clips = [];
+let actx;
+const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+async function peaksFor(blob, n = 160) {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const buf = await actx.decodeAudioData(await blob.arrayBuffer());
+    const data = buf.getChannelData(0), step = Math.max(1, Math.floor(data.length / n)), out = [];
+    for (let i = 0; i < n; i++) {
+      let m = 0;
+      for (let j = i * step, end = Math.min(data.length, j + step); j < end; j++) m = Math.max(m, Math.abs(data[j]));
+      out.push(m);
+    }
+    const max = Math.max(...out, 0.01);
+    return out.map((v) => v / max);
+  } catch { return null; }
+}
+
+function drawWave(c) {
+  const cv = c.canvas, dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (!w) return;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const css = getComputedStyle(document.documentElement);
+  const played = css.getPropertyValue("--accent").trim(), rest = css.getPropertyValue("--wave").trim();
+  const peaks = c.peaks || Array(80).fill(0.15);
+  const bar = 2, gap = 2, n = Math.floor(w / (bar + gap)), progress = c.audio.duration ? c.audio.currentTime / c.audio.duration : 0;
+  for (let i = 0; i < n; i++) {
+    const v = peaks[Math.floor((i / n) * peaks.length)];
+    const bh = Math.max(2, v * (h - 4));
+    g.fillStyle = i / n < progress ? played : rest;
+    g.beginPath(); g.roundRect ? g.roundRect(i * (bar + gap), (h - bh) / 2, bar, bh, 1) : g.rect(i * (bar + gap), (h - bh) / 2, bar, bh); g.fill();
+  }
+}
+function redrawAll() { clips.forEach(drawWave); }
+window.addEventListener("resize", redrawAll);
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", redrawAll);
+
+function setPlaying(c, on) {
+  c.btn.innerHTML = icon(on ? "pause" : "play");
+  c.btn.setAttribute("aria-label", on ? "Пауза" : "Воспроизвести");
+}
+
+function renderHistory() {
+  const box = $("history");
+  $("histCount").textContent = clips.length ? String(clips.length) : "";
+  if (!clips.length) {
+    box.innerHTML = `<div class="card empty">${icon("wave")}<div>Здесь появятся озвученные фразы.</div><div>Напишите текст и нажмите «Озвучить» или <kbd>${isMac ? "⌘" : "Ctrl"}</kbd> <kbd>Enter</kbd>.</div></div>`;
+    return;
+  }
+  for (const c of clips) {
+    if (c.el) continue;
+    const el = document.createElement("article");
+    el.className = "card clip";
+    const swap = c.meta.requested_voice ? `<span class="swap" title="Выбранный голос не говорит на этом языке">вместо ${c.meta.requested_voice}</span>` : "";
+    el.innerHTML = `
+      <button class="play" type="button"></button>
+      <div class="wave" role="slider" tabindex="0" aria-label="Перемотка" aria-valuemin="0" aria-valuemax="${Math.round(c.meta.duration)}" aria-valuenow="0"><canvas></canvas></div>
+      <div class="text"></div>
+      <div class="foot">
+        <div class="info"><b>${c.meta.voice}</b>${swap}<span>${c.meta.lang}</span><span class="time">0:00 / ${fmtTime(c.meta.duration)}</span><span>синтез ${c.meta.synth_seconds.toFixed(2)} с</span><span>${c.fmt}</span></div>
+        <button class="ghost reuse" type="button">${icon("reuse")}В поле</button>
+        <a class="ghost" href="${c.url}" download="ltts-${c.meta.voice.replace(":", "-")}.${c.fmt}">${icon("download")}Скачать</a>
+      </div>`;
+    el.querySelector(".text").textContent = c.text;
+    Object.assign(c, { el, btn: el.querySelector(".play"), canvas: el.querySelector("canvas"), wave: el.querySelector(".wave"), timeEl: el.querySelector(".time") });
+    c.audio = new Audio(c.url);
+    setPlaying(c, false);
+    let raf;
+    const tick = () => { drawWave(c); c.timeEl.textContent = `${fmtTime(c.audio.currentTime)} / ${fmtTime(c.meta.duration)}`; c.wave.setAttribute("aria-valuenow", Math.round(c.audio.currentTime)); if (!c.audio.paused) raf = requestAnimationFrame(tick); };
+    c.audio.onplay = () => { clips.forEach((o) => o !== c && o.audio && !o.audio.paused && o.audio.pause()); setPlaying(c, true); tick(); };
+    c.audio.onpause = () => { setPlaying(c, false); cancelAnimationFrame(raf); tick(); };
+    c.audio.onended = () => { c.audio.currentTime = 0; tick(); };
+    c.btn.onclick = () => (c.audio.paused ? c.audio.play() : c.audio.pause());
+    const seekTo = (t) => { c.audio.currentTime = Math.max(0, Math.min(c.meta.duration, t)); tick(); };
+    c.wave.onclick = (e) => { const r = c.wave.getBoundingClientRect(); seekTo(((e.clientX - r.left) / r.width) * c.meta.duration); };
+    c.wave.onkeydown = (e) => {
+      if (e.key === "ArrowRight") { seekTo(c.audio.currentTime + 2); e.preventDefault(); }
+      else if (e.key === "ArrowLeft") { seekTo(c.audio.currentTime - 2); e.preventDefault(); }
+      else if (e.key === " " || e.key === "Enter") { c.btn.click(); e.preventDefault(); }
+    };
+    el.querySelector(".reuse").onclick = () => { $("text").value = c.text; updateCount(); updateHint(); $("text").focus(); };
+  }
+  box.replaceChildren(...clips.map((c) => c.el));
+  requestAnimationFrame(redrawAll);
+}
+
+// ---------- синтез ----------
+let timer;
+function busy(on, text = "") {
+  const btn = $("go");
+  btn.setAttribute("aria-busy", String(on));
+  btn.innerHTML = on ? `${icon("loader", "spin")}<span>Озвучиваю…</span>` : `${icon("wave")}<span>Озвучить</span>`;
+  clearInterval(timer);
+  // прогресс-полоса только для долгого — скачивание голоса или сборка RHVoice
+  $("progress").hidden = !on || !text;
+  if (on && text) {
+    $("progressText").textContent = text;
+    const t0 = Date.now();
+    $("elapsed").textContent = "0:00";
+    timer = setInterval(() => { $("elapsed").textContent = fmtTime((Date.now() - t0) / 1000); }, 1000);
+  }
+}
+
+async function speak() {
+  const text = $("text").value.trim(), opt = selectedVoice(), btn = $("go");
+  if (!text) { $("text").focus(); return; }
+  if (!opt || btn.getAttribute("aria-busy") === "true") return;
+  let voice = opt.value, pending = opt.dataset.pending;
+  if (voice.startsWith("clone:") && $("hq").checked && !$("hq").disabled) {
+    voice = "clonehq:" + voice.slice(6);
+    pending = state.voices.find((v) => v.id === voice)?.installed ? "" : "download";
+  }
+  const eng = voice.split(":")[0];
+  const firstUse = pending === "download" && FIRST_USE[eng] ? `${FIRST_USE[eng]} — только в первый раз` : "";
+  busy(true, firstUse || { build: "Собираю RHVoice из исходников — обычно 1–3 минуты", download: "Скачиваю голос — первый раз может занять до минуты" }[pending] || "");
+  $("err").hidden = true;
+  try {
+    const body = { text, voice, speed: +$("speed").value, format: state.format, lang: "auto" };
+    const r = await fetch("/api/synth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    const meta = JSON.parse(r.headers.get("X-LTTS-Meta") || "{}");
+    const blob = await r.blob();
+    const c = { text, meta, fmt: body.format, url: URL.createObjectURL(blob) };
+    clips.unshift(c);
+    if (clips.length > 30) { const old = clips.pop(); old.audio?.pause(); URL.revokeObjectURL(old.url); }
+    renderHistory();
+    c.audio.play().catch(() => {});
+    c.peaks = await peaksFor(blob);
+    drawWave(c);
+    if (pending) load();
+  } catch (e) {
+    $("err").innerHTML = `${icon("alert")}<span></span>`;
+    $("err").querySelector("span").textContent = e.message;
+    $("err").hidden = false;
+  } finally {
+    busy(false);
+  }
+}
+
+// ---------- клонирование голоса ----------
+const SCRIPTS = {
+  en: "Hi there! I'm recording a short sample of my voice. The quick brown fox jumps over the lazy dog, and then it runs back home before the rain begins.",
+  ru: "Привет! Я записываю короткий образец своего голоса. Съешь же ещё этих мягких французских булок, да выпей чаю, а потом прогуляйся по парку.",
+};
+const MAX_REC = 20;
+const clone = { src: "rec", gender: "", blob: null, rec: null };
+
+function wavBlob(chunks, rate) {
+  const n = chunks.reduce((a, c) => a + c.length, 0), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const str = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt "); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 2, true);
+  let o = 44;
+  for (const c of chunks) for (let i = 0; i < c.length; i++, o += 2) { const x = Math.max(-1, Math.min(1, c[i])); v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7fff, true); }
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+function setRecButton(on) {
+  $("recBtn").setAttribute("aria-pressed", String(on));
+  $("recBtn").innerHTML = on ? `${icon("stop")}Остановить` : `${icon("mic")}${clone.blob ? "Перезаписать" : "Начать запись"}`;
+}
+
+async function startRec() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
+  } catch (e) { return cloneError("Нет доступа к микрофону: " + e.message); }
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1), chunks = [];
+  const t0 = performance.now();
+  proc.onaudioprocess = (e) => {
+    const d = e.inputBuffer.getChannelData(0);
+    chunks.push(new Float32Array(d));
+    let sum = 0; for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+    $("meter").style.width = Math.min(100, Math.sqrt(sum / d.length) * 400) + "%";
+    const sec = (performance.now() - t0) / 1000;
+    $("recTime").textContent = fmtTime(sec);
+    if (sec >= MAX_REC) stopRec();
+  };
+  src.connect(proc); proc.connect(ctx.destination);
+  clone.rec = { stream, ctx, src, proc, chunks };
+  $("recPreview").hidden = true; $("cloneErr").hidden = true;
+  setRecButton(true);
+}
+
+function stopRec() {
+  const r = clone.rec;
+  if (!r) return;
+  clone.rec = null;
+  r.proc.disconnect(); r.src.disconnect(); r.stream.getTracks().forEach((t) => t.stop());
+  clone.blob = wavBlob(r.chunks, r.ctx.sampleRate);
+  r.ctx.close();
+  $("meter").style.width = "0";
+  $("recPreview").src = URL.createObjectURL(clone.blob); $("recPreview").hidden = false;
+  if (!$("cloneText").value.trim()) $("cloneText").value = $("script").textContent;
+  setRecButton(false);
+}
+
+function cloneError(msg) { $("cloneErr").innerHTML = `${icon("alert")}<span></span>`; $("cloneErr").querySelector("span").textContent = msg; $("cloneErr").hidden = false; }
+
+function syncCloneSrc() {
+  $("srcSeg").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === clone.src)));
+  $("recPane").hidden = clone.src !== "rec"; $("filePane").hidden = clone.src !== "file";
+}
+function syncCloneGender() { $("cloneGender").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === clone.gender))); }
+
+function openClone() {
+  Object.assign(clone, { src: "rec", gender: state.gender === "all" ? "" : state.gender, blob: null });
+  $("script").textContent = SCRIPTS[state.lang];
+  ["cloneName", "cloneText"].forEach((id) => ($(id).value = ""));
+  $("cloneFile").value = ""; $("consent").checked = false; $("cloneErr").hidden = true; $("recPreview").hidden = true;
+  $("recTime").textContent = "0:00";
+  syncCloneSrc(); syncCloneGender(); setRecButton(false);
+  $("cloneDlg").showModal();
+  $("cloneName").focus();
+}
+function closeClone() { stopRec(); $("cloneDlg").close(); }
+
+async function saveClone() {
+  const name = $("cloneName").value.trim();
+  const blob = clone.src === "rec" ? clone.blob : $("cloneFile").files[0];
+  if (!blob) return cloneError(clone.src === "rec" ? "Сначала запишите образец" : "Выберите файл с образцом");
+  if (!name) { $("cloneName").focus(); return cloneError("Придумайте имя голосу"); }
+  if (!$("consent").checked) return cloneError("Подтвердите, что это ваш голос или у вас есть согласие владельца");
+  const fd = new FormData();
+  fd.append("name", name); fd.append("audio", blob, blob.name || "sample.wav");
+  fd.append("text", $("cloneText").value.trim()); fd.append("gender", clone.gender);
+  const btn = $("cloneSave");
+  btn.setAttribute("aria-busy", "true"); btn.innerHTML = `${icon("loader", "spin")}<span>Сохраняю…</span>`;
+  try {
+    const r = await fetch("/api/clones", { method: "POST", body: fd });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || data.error?.message || r.statusText);
+    store.set("voice." + state.lang, data.voice);
+    $("cloneDlg").close();
+    await load();
+  } catch (e) { cloneError(e.message); }
+  finally { btn.setAttribute("aria-busy", "false"); btn.innerHTML = "<span>Сохранить голос</span>"; }
+}
+
+$("cloneOpen").onclick = openClone;
+$("cloneClose").onclick = $("cloneCancel").onclick = closeClone;
+$("cloneDlg").addEventListener("cancel", stopRec);
+$("recBtn").onclick = () => (clone.rec ? stopRec() : startRec());
+$("cloneSave").onclick = saveClone;
+$("srcSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { stopRec(); clone.src = b.dataset.v; syncCloneSrc(); } });
+$("cloneGender").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { clone.gender = b.dataset.v; syncCloneGender(); } });
+
+$("go").onclick = speak;
+$("text").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); speak(); } });
+$("text").addEventListener("input", () => { updateCount(); updateHint(); });
+$("speed").addEventListener("input", () => { $("speedv").textContent = (+$("speed").value).toFixed(2) + "×"; store.set("speed", +$("speed").value); });
+$("speed").value = store.get("speed", 1); $("speedv").textContent = (+$("speed").value).toFixed(2) + "×";
+updateCount(); updateHint(); renderHistory();
+load().catch((e) => { $("err").innerHTML = `${icon("alert")}<span>Сервер недоступен: ${e.message}</span>`; $("err").hidden = false; });
+</script>
+</body>
+</html>
