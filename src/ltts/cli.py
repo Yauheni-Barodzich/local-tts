@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .client import DEFAULT_TIMEOUT, server_alive, server_url, synth_auto
 from .paths import DEFAULT_HOST, DEFAULT_PORT
+from .text import LANGS
 
 ENGINE_NAMES = ["silero", "piper", "rhvoice", "kokoro", "clone", "clonehq"]
 
@@ -115,7 +116,7 @@ def cmd_voices(args) -> int:
     voices = all_voices(args.engine, args.lang)
     if args.installed:
         voices = [v for v in voices if v.installed]
-    defaults = {lang: default_voice(lang) for lang in ("ru", "en")}
+    defaults = {lang: default_voice(lang) for lang in LANGS}
     if args.json:
         out = {"default": defaults["ru"], "defaults": defaults, "voices": [v.to_dict() for v in voices]}
         print(json.dumps(out, ensure_ascii=False))
@@ -194,7 +195,7 @@ def cmd_default(args) -> int:
         cfg.pop("default_voice", None)
         cfg.setdefault("default_voices", {})[lang] = f"{eng.name}:{name}"
         save_config(cfg)
-    defaults = {lang: default_voice(lang) for lang in ("ru", "en")}
+    defaults = {lang: default_voice(lang) for lang in LANGS}
     emit(args, {"default_voices": defaults}, "\n".join(f"{k}: {v}" for k, v in defaults.items()))
     return 0
 
@@ -298,7 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = argparse.ArgumentParser(
         prog="ltts",
-        description="Локальный синтез речи (русский и английский): Silero, Piper, RHVoice.",
+        description="Локальный синтез речи (русский, английский, немецкий): Silero, Piper, RHVoice, Kokoro, клоны.",
         epilog=EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -311,7 +312,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("-s", "--speed", type=float, default=1.0, help="скорость 0.25–4.0 (по умолчанию 1.0)")
     s.add_argument("-o", "--output", help="файл (формат по расширению) или '-' для stdout")
     s.add_argument("-f", "--format", help="wav|mp3|ogg|opus|flac|aac|pcm")
-    s.add_argument("-l", "--lang", choices=["auto", "ru", "en"], default="auto",
+    s.add_argument("-l", "--lang", choices=["auto", *LANGS], default="auto",
                    help="язык текста; auto (по умолчанию) — определить и подобрать голос того же движка и пола")
     s.add_argument("-p", "--play", action="store_true", help="проиграть после синтеза")
     s.add_argument("--json", action="store_true", help="метаданные в JSON")
@@ -324,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("voices", help="список голосов")
     s.add_argument("-e", "--engine", choices=ENGINE_NAMES)
-    s.add_argument("-l", "--lang", choices=["ru", "en"])
+    s.add_argument("-l", "--lang", choices=list(LANGS))
     s.add_argument("-i", "--installed", action="store_true", help="только скачанные")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_voices)

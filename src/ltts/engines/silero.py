@@ -13,6 +13,8 @@ MODELS_BY_LANG = {
     "ru": ("ru/v5_5_ru", {"xenia": "female", "kseniya": "female", "baya": "female", "aidar": "male", "eugene": "male"}),
     "en": ("en/v3_en", {"en_0": "female", "en_14": "female", "en_99": "female",
                         "en_2": "male", "en_13": "male", "en_79": "male"}),
+    "de": ("de/v3_de", {"eva_k": "female", "hokuspokus": "female", "bernd_ungerer": "male",
+                        "friedrich": "male", "karlsson": "male"}),
 }  # fmt: skip
 EN_ANY = re.compile(r"en_(\d+)$")
 RATE = 48000
@@ -21,15 +23,16 @@ CHUNK = 800  # silero не любит длинные куски
 
 class Silero(Engine):
     name = "silero"
-    title = "Silero TTS (v5_5_ru, v3_en)"
+    title = "Silero TTS (v5_5_ru, v3_en, v3_de)"
 
     def __init__(self) -> None:
         super().__init__()
         self._models: dict = {}
 
     def _lang(self, voice: str) -> str:
-        if voice in MODELS_BY_LANG["ru"][1]:
-            return "ru"
+        for lang in ("ru", "de"):
+            if voice in MODELS_BY_LANG[lang][1]:
+                return lang
         m = EN_ANY.match(voice)
         if m and int(m.group(1)) <= 117:
             return "en"

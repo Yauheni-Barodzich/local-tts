@@ -20,6 +20,12 @@ CATALOG = {
     "joe": ("en_US", "medium", "male"),
     "cori": ("en_GB", "medium", "female"),
     "alan": ("en_GB", "medium", "male"),
+    "thorsten": ("de_DE", "high", "male"),
+    "kerstin": ("de_DE", "low", "female"),
+    "ramona": ("de_DE", "low", "female"),
+    "eva_k": ("de_DE", "x_low", "female"),
+    "karlsson": ("de_DE", "low", "male"),
+    "pavoque": ("de_DE", "low", "male"),
 }
 
 

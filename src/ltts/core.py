@@ -22,10 +22,14 @@ PREFERRED = {
     "ru": ["silero:xenia", "piper:irina", "rhvoice:anna", "silero:aidar", "piper:denis", "rhvoice:aleksandr"],
     "en": ["kokoro:af_heart", "silero:en_0", "piper:lessac", "rhvoice:slt",
            "kokoro:am_michael", "silero:en_2", "piper:ryan", "rhvoice:bdl"],
+    # по замеру Whisper: silero:eva_k 3.8% WER, thorsten — самый естественный мужской; kerstin/ramona (low) — хуже
+    "de": ["silero:eva_k", "piper:thorsten", "silero:karlsson", "silero:hokuspokus", "piper:eva_k", "piper:pavoque",
+           "silero:bernd_ungerer", "piper:kerstin"],
 }  # fmt: skip
 DEFAULT_DOWNLOADS = [
     "silero:xenia", "piper:irina", "piper:denis", "rhvoice:anna", "rhvoice:aleksandr",
     "kokoro:af_heart", "silero:en_0", "piper:lessac", "piper:ryan", "rhvoice:slt", "rhvoice:bdl",
+    "silero:eva_k", "piper:thorsten",
 ]  # fmt: skip
 
 
@@ -133,6 +137,13 @@ def synthesize(
         swap = engine_voice(eng, lang, info.gender) or engine_voice(eng, lang)
         if swap:
             name = swap
+        else:  # у движка нет этого языка (kokoro + немецкий) — лучший голос того же пола из других движков
+            for vid in PREFERRED[lang]:
+                e, n = vid.split(":")
+                cand = ENGINES[e].voice(n)
+                if cand and ENGINES[e].installable() and (not info.gender or cand.gender == info.gender):
+                    eng, name = ENGINES[e], n
+                    break
     if not eng.is_installed(name):  # скачивание голоса заодно доводит движок до рабочего состояния (сборка RHVoice)
         if not auto_download or not eng.installable():
             raise EngineError(f"{eng.name}: {eng.status()[1] or f'голос {name} не скачан — `ltts download {eng.name}:{name}`'}")

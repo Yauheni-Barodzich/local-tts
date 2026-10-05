@@ -283,7 +283,7 @@ curl -s localhost:8765/v1/audio/speech -H 'Content-Type: application/json' \
       <div class="field">
         <div class="label" id="langLabel">Язык</div>
         <div class="seg" id="langSeg" role="group" aria-labelledby="langLabel">
-          <button type="button" data-v="ru">Русский</button><button type="button" data-v="en">English</button>
+          <button type="button" data-v="ru">Русский</button><button type="button" data-v="en">English</button><button type="button" data-v="de">Deutsch</button>
         </div>
       </div>
       <div class="field">
@@ -388,7 +388,11 @@ const FIRST_USE = {
   clone: "Скачиваю модель клонирования OmniVoice (~1.5 ГБ)",
   clonehq: "Скачиваю модель HQ VoxCPM2 (~3 ГБ)",
 };
-const LANG_NAMES = { ru: "русском", en: "английском" };
+const LANG_NAMES = { ru: "русском", en: "английском", de: "немецком" };
+const LANG_SHOW = { ru: "русские", en: "английские", de: "немецкие" };
+// те же правила, что на сервере (ltts/text.py): кириллица -> ru; латиница -> de по умлаутам и служебным словам, иначе en
+const DE_WORDS = new Set("und der die das ist nicht ich du er sie es wir ihr mit auf für von zu den dem des ein eine einen einem eines auch sich noch nur wie wenn aber oder so schon kann muss mehr sehr hier dann jetzt heute bitte danke ja nein gut ganz habe hat haben sind bin war waren wird werden wurde mein dein sein unser über nach bei aus um vor durch ohne gegen weil dass als wo was wer warum doch mal immer wieder".split(" "));
+const EN_WORDS = new Set("the and is are was were be been to of in on at for with that this it you he she we they not have has had do does did will would can could should a an or but if then so just very here there what who why how my your our their from by as about into over after before because which when where".split(" "));
 const GENDER = { female: "жен.", male: "муж." };
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 document.querySelector(".hint kbd").textContent = isMac ? "⌘" : "Ctrl";
@@ -529,14 +533,18 @@ $("hq").addEventListener("change", () => store.set("hq", $("hq").checked));
 
 // ---------- подсказка про язык ----------
 function detectLang(text) {
-  const cyr = (text.match(/[А-Яа-яЁё]/g) || []).length, lat = (text.match(/[A-Za-z]/g) || []).length;
+  const cyr = (text.match(/[А-Яа-яЁё]/g) || []).length, lat = (text.match(/[A-Za-zÄÖÜäöüß]/g) || []).length;
   if (!cyr && !lat) return null;
-  return lat && cyr * 10 < lat ? "en" : "ru";
+  if (!lat || cyr * 10 >= lat) return "ru";
+  const words = (text.toLowerCase().match(/[a-zäöüß']+/g) || []);
+  const de = words.filter((w) => DE_WORDS.has(w)).length + 2 * (text.match(/[äöüÄÖÜß]/g) || []).length;
+  const en = words.filter((w) => EN_WORDS.has(w)).length;
+  return de > en ? "de" : "en";
 }
 function updateHint() {
   const hint = $("hint"), detected = detectLang($("text").value);
   if (!detected || detected === state.lang) { hint.hidden = true; return; }
-  hint.innerHTML = `${icon("alert")}<span>Текст на ${LANG_NAMES[detected]} — голос подберётся сам.</span><button type="button">Показать ${detected === "en" ? "английские" : "русские"} голоса</button>`;
+  hint.innerHTML = `${icon("alert")}<span>Текст на ${LANG_NAMES[detected]} — голос подберётся сам.</span><button type="button">Показать ${LANG_SHOW[detected]} голоса</button>`;
   hint.querySelector("button").onclick = () => { state.lang = detected; store.set("lang", detected); syncLang(); renderVoices(); updateHint(); };
   hint.hidden = false;
 }
@@ -688,6 +696,7 @@ async function speak() {
 const SCRIPTS = {
   en: "Hi there! I'm recording a short sample of my voice. The quick brown fox jumps over the lazy dog, and then it runs back home before the rain begins.",
   ru: "Привет! Я записываю короткий образец своего голоса. Съешь же ещё этих мягких французских булок, да выпей чаю, а потом прогуляйся по парку.",
+  de: "Hallo! Ich nehme gerade eine kurze Probe meiner Stimme auf. Der schnelle braune Fuchs springt über den faulen Hund, und danach trinke ich gemütlich einen Kaffee.",
 };
 const MAX_REC = 20;
 const clone = { src: "rec", gender: "", blob: null, rec: null };

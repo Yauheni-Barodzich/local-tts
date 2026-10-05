@@ -1,6 +1,6 @@
 ---
 name: ltts
-description: Озвучить текст локально (русский и английский, офлайн) через CLI ltts — Silero, Piper, RHVoice. Используй, когда нужно сгенерировать аудио/голос из текста, озвучить ответ, сделать войсовер или проиграть фразу вслух.
+description: Озвучить текст локально (русский, английский, немецкий, офлайн) через CLI ltts — Silero, Piper, RHVoice, Kokoro, клоны голоса. Используй, когда нужно сгенерировать аудио/голос из текста, озвучить ответ, сделать войсовер или проиграть фразу вслух.
 ---
 
 # ltts — локальный синтез речи
@@ -17,7 +17,7 @@ ltts say "Текст" --play                    # проиграть через 
 ```
 
 - `-v`: `engine:voice` (`silero:xenia`, `silero:aidar`, `piper:denis`, `rhvoice:anna`), только имя или только движок.
-- `--lang auto|ru|en`: по умолчанию язык определяется сам, и под английский текст берётся английский голос того же движка и пола (`requested_voice` в JSON покажет замену).
+- `--lang auto|ru|en|de`: по умолчанию язык определяется сам, и под текст берётся голос нужного языка того же движка и пола (или другого движка, если в этом нет такого языка) (`requested_voice` в JSON покажет замену).
 - `-s`: скорость 0.25–4.0. `-f`: wav|mp3|ogg|opus|flac|pcm (по умолчанию из расширения `-o`, иначе wav).
 - Без `-o` файл кладётся в `<данные ltts>/out/` (`~/.local/share/ltts` на macOS/Linux, `%LOCALAPPDATA%\ltts` на Windows), путь — в `path`.
 - На Windows RHVoice недоступен — бери silero или piper.
@@ -28,7 +28,7 @@ ltts say "Текст" --play                    # проиграть через 
 
 ## Выбор голоса
 
-- Русский: `silero:xenia` (жен.), `silero:aidar` (муж.). Английский: `kokoro:af_heart` (жен.), `kokoro:am_michael` (муж.), британский `kokoro:bf_emma` / `kokoro:bm_george`. На других платформах: `piper:lessac` / `piper:ryan`.
+- Русский: `silero:xenia` (жен.), `silero:aidar` (муж.). Английский: `kokoro:af_heart` (жен.), `kokoro:am_michael` (муж.), британский `kokoro:bf_emma` / `kokoro:bm_george`. Немецкий: `silero:eva_k` (жен.), `piper:thorsten` (муж.). На других платформах: `piper:lessac` / `piper:ryan`.
 - Максимальная скорость или длинные тексты: `rhvoice:anna` / `rhvoice:aleksandr`.
 - `ltts voices --installed --json` — что уже скачано; нескачанные голоса скачаются при первом вызове.
 

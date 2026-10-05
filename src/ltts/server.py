@@ -13,7 +13,7 @@ from . import __version__
 from .audio import ALL_FORMATS, MIME
 from .core import ENGINES, all_voices, default_voice, doctor, download, engine_voice, render
 from .engines.base import EngineError, ModelError
-from .text import detect_lang
+from .text import LANGS, detect_lang
 
 app = FastAPI(title="ltts", version=__version__)
 
@@ -112,7 +112,7 @@ def status():
 
 @app.get("/api/voices")
 def voices():
-    defaults = {lang: default_voice(lang) for lang in ("ru", "en")}
+    defaults = {lang: default_voice(lang) for lang in LANGS}
     return {"default": defaults["ru"], "defaults": defaults, "voices": [v.to_dict() for v in all_voices()]}
 
 

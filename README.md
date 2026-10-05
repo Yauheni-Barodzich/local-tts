@@ -1,6 +1,6 @@
 # ltts — локальный синтез речи
 
-Silero, Piper, RHVoice и **Kokoro** — русский и английский в одной команде, плюс **клонирование голоса**
+Silero, Piper, RHVoice и **Kokoro** — русский, английский и немецкий в одной команде, плюс **клонирование голоса**
 по образцу 8–20 секунд (OmniVoice, режим HQ 48 кГц — VoxCPM2). Всё работает офлайн.
 
 - **CLI для агентов**: `--json`, stdin, понятные коды выхода, никакого интерактива
@@ -67,7 +67,7 @@ ltts doctor [--verify] [--json]                 # что установлено,
 **Язык** определяется по тексту (`--lang auto`, по умолчанию). Если текст на английском, а голос русский,
 берётся английский голос того же движка и пола: `xenia → silero:en_0`, `aidar → silero:en_2`,
 `irina → piper:lessac`, `anna → rhvoice:slt`. Это работает и в обратную сторону. В `--json` заменённый голос виден в `requested_voice`.
-`--lang ru|en` фиксирует язык: тогда явно выбранный голос используется как есть.
+`--lang ru|en|de` фиксирует язык: тогда явно выбранный голос используется как есть.
 Английские слова внутри русской фразы читает русский голос, поэтому с акцентом.
 
 Если запущен `ltts serve`, команда `ltts say` идёт через него: модели уже прогреты, ответ за ~0.3 с вместо ~1.8 с
@@ -90,13 +90,18 @@ sample_rate, synth_seconds, via, [fallback]`. Ошибка: код выхода 
 
 ## Голоса
 
-| Движок | Русский | English | Скорость | Особенности |
-|---|---|---|---|---|
-| silero | xenia, kseniya, baya, aidar, eugene (v5_5_ru) | en_0, en_14, en_99 (жен.), en_2, en_13, en_79 (муж.) — и любой из en_0…en_117 (v3_en) | ~0.5 с / фраза | лучшее качество; ударения `+` (`з+амок`); числа — словами автоматически |
-| piper | irina, denis, dmitri, ruslan | lessac, amy, ryan, joe (US), cori, alan (UK) | ~0.4 с | ONNX, лёгкий |
-| rhvoice | anna, aleksandr, elena, tatiana, … (23) | slt, clb, lyubov, bdl, alan, ksp, evgeniy-eng, dasha-eng | ~0.1 с | самый быстрый, классический звук |
-| **kokoro** (Apple Silicon) | — | 27 голосов: af_heart, af_bella, am_michael, am_adam (US), bf_emma, bm_george (UK), … | ~0.03 RTF | английский по умолчанию: №1 open-weight в TTS Arena |
-| **clone** / **clonehq** (Apple Silicon) | ваши голоса | ваши голоса | 0.14 / 0.8 RTF | клонирование по образцу; клон говорит и по-русски, и по-английски |
+| Движок | Русский | English | Deutsch | Скорость | Особенности |
+|---|---|---|---|---|---|
+| silero | xenia, kseniya, baya, aidar, eugene (v5_5_ru) | en_0, en_14, en_99 (жен.), en_2, en_13, en_79 (муж.) — и любой из en_0…en_117 (v3_en) | **eva_k** (жен., по умолч.), hokuspokus, karlsson, bernd_ungerer, friedrich (v3_de) | ~0.5 с / фраза | лучшее качество; ударения `+` (`з+амок`); числа — словами автоматически |
+| piper | irina, denis, dmitri, ruslan | lessac, amy, ryan, joe (US), cori, alan (UK) | **thorsten** (муж., high), eva_k, pavoque, karlsson, kerstin, ramona | ~0.4 с | ONNX, лёгкий |
+| rhvoice | anna, aleksandr, elena, tatiana, … (23) | slt, clb, lyubov, bdl, alan, ksp, evgeniy-eng, dasha-eng | — | ~0.1 с | самый быстрый, классический звук |
+| **kokoro** (Apple Silicon) | — | 27 голосов: af_heart, af_bella, am_michael, am_adam (US), bf_emma, bm_george (UK), … | — | ~0.03 RTF | английский по умолчанию: №1 open-weight в TTS Arena |
+| **clone** / **clonehq** (Apple Silicon) | ваши голоса | ваши голоса | ваши голоса | 0.14 / 0.8 RTF | клонирование по образцу; клон говорит на всех трёх языках |
+
+**Немецкий.** Латинский текст считается немецким, если в нём есть умлауты или ß, или немецких служебных слов
+(und, der, ist, nicht…) больше, чем английских. Если у выбранного движка нет немецкого (Kokoro, RHVoice),
+берётся лучший немецкий голос того же пола. Замер Whisper: `silero:eva_k` — 3.8% ошибок, `silero:karlsson` — 9%,
+`piper:thorsten` — самый естественный мужской. `kerstin` и `ramona` — модели low, у них около 23% ошибок.
 
 **Почему эти модели.** Сравнивали на M5 Pro (RTF, WER по Whisper, похожесть клона по Resemblyzer). Kokoro:
 0.033 RTF и 0% ошибок. OmniVoice: похожесть клона 0.94, 0.14 RTF, 3.4 ГБ. Qwen3-TTS даёт ту же похожесть,

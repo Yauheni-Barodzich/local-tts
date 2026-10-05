@@ -6,7 +6,7 @@ from ..text import detect_lang
 from .base import Engine, EngineError, Voice
 from .mlx_common import MLX_LOCK, fetch_repo, load, mlx_status, quiet_stdout, repo_ok, reset_repo, to_numpy
 
-LANG_NAMES = {"ru": "Russian", "en": "English"}
+LANG_NAMES = {"ru": "Russian", "en": "English", "de": "German"}
 
 
 def _natural_duration(text: str) -> float:

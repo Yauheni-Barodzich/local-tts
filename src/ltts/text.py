@@ -7,14 +7,30 @@ _SENT = re.compile(r"(?<=[.!?…;])\s+|\n+")
 
 
 _CYR = re.compile(r"[А-Яа-яЁё]")
-_LAT = re.compile(r"[A-Za-z]")
-LANGS = ("ru", "en")
+_LAT = re.compile(r"[A-Za-zÄÖÜäöüß]")
+_WORD = re.compile(r"[A-Za-zÄÖÜäöüß']+")
+LANGS = ("ru", "en", "de")
+
+# частые служебные слова: по ним латиница делится на английский и немецкий
+_DE_WORDS = set("""und der die das ist nicht ich du er sie es wir ihr mit auf für von zu den dem des ein eine einen einem
+    eines auch sich auf noch nur wie wenn aber oder so schon kann muss mehr sehr hier dann jetzt heute bitte danke ja nein
+    gut ganz habe hat haben sind bin war waren wird werden wurde mein dein sein unser über nach bei aus um vor durch ohne
+    gegen weil dass als wo was wer warum doch mal immer wieder""".split())
+_EN_WORDS = set("""the and is are was were be been to of in on at for with that this it you he she we they not have has
+    had do does did will would can could should a an or but if then so just very here there what who why how my your
+    our their from by as about into over after before because which when where""".split())
 
 
 def detect_lang(text: str) -> str:
-    """ru, если есть хоть немного кириллицы (английские слова в русской фразе — норм), иначе en при латинице."""
+    """ru — если заметная доля кириллицы (английские слова в русской фразе — норм).
+    Латиница: de, если есть умлауты/ß или немецких служебных слов больше английских, иначе en."""
     cyr, lat = len(_CYR.findall(text)), len(_LAT.findall(text))
-    return "en" if lat and cyr * 10 < lat else "ru"
+    if not lat or cyr * 10 >= lat:
+        return "ru"
+    words = [w.lower() for w in _WORD.findall(text)]
+    de = sum(w in _DE_WORDS for w in words) + 2 * len(re.findall(r"[äöüÄÖÜß]", text))
+    en = sum(w in _EN_WORDS for w in words)
+    return "de" if de > en else "en"
 
 
 def numbers_to_words(text: str, lang: str = "ru") -> str:
@@ -22,15 +38,18 @@ def numbers_to_words(text: str, lang: str = "ru") -> str:
     Падежи не согласуются, но лучше, чем молча проглоченные цифры."""
     if lang == "en":
         text = re.sub(r"(?<=\d),(?=\d{3}\b)", "", text)  # 1,000 -> 1000
+    elif lang == "de":
+        text = re.sub(r"(?<=\d)\.(?=\d{3}\b)", "", text)  # 1.000 -> 1000 (в немецком точка — разделитель тысяч)
+    percent = {"ru": " процентов", "en": " percent", "de": " Prozent"}
 
     def repl(m: re.Match) -> str:
         raw = m.group(1)
-        raw = raw.replace(",", ".") if lang == "ru" else raw
+        raw = raw.replace(",", ".") if lang in ("ru", "de") else raw  # десятичная запятая
         try:
             words = num2words(float(raw) if "." in raw else int(raw), lang=lang)
         except Exception:
             return m.group(0)
-        return words + ((" процентов" if lang == "ru" else " percent") if m.group(2) else "")
+        return words + (percent.get(lang, "") if m.group(2) else "")
 
     return _NUM.sub(repl, text)
 
