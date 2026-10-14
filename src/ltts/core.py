@@ -65,9 +65,14 @@ def save_config(cfg: dict) -> None:
     CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def all_voices(engine: str | None = None, lang: str | None = None) -> list[Voice]:
-    engines = [ENGINES[engine]] if engine else ENGINES.values()
-    return [v for e in engines for v in e.voices() if not lang or v.lang in (lang, "any")]
+def all_voices(engine: str | None = None, lang: str | None = None, on_step=None) -> list[Voice]:
+    engines = [ENGINES[engine]] if engine else list(ENGINES.values())
+    out: list[Voice] = []
+    for e in engines:
+        if on_step:
+            on_step(e.name)
+        out.extend(v for v in e.voices() if not lang or v.lang in (lang, "any"))
+    return out
 
 
 def voice_info(eng: Engine, name: str) -> Voice:
@@ -257,12 +262,14 @@ def verify_models() -> dict:
     return {"checked": checked, "corrupt": corrupt}
 
 
-def doctor() -> dict:
+def doctor(on_step=None) -> dict:
     from . import __version__
     from .paths import HOME
 
     engines = {}
     for e in ENGINES.values():
+        if on_step:
+            on_step(e.name)
         ok, why = e.status()
         engines[e.name] = {
             "title": e.title,

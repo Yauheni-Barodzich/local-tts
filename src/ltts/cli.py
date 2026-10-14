@@ -13,6 +13,10 @@ from .client import DEFAULT_TIMEOUT, server_alive, server_url, synth_auto
 from .paths import DEFAULT_HOST, DEFAULT_PORT
 from .text import LANGS
 
+def _step(msg: str) -> None:
+    print(f"  → {msg}", file=sys.stderr, flush=True)
+
+
 EXAMPLES = """
 примеры:
   ltts say "Привет, мир" --play
@@ -111,7 +115,9 @@ def cmd_say(args) -> int:
 def cmd_voices(args) -> int:
     from .core import all_voices, default_voice
 
-    voices = all_voices(args.engine, args.lang)
+    _step("каталог голосов")
+    voices = all_voices(args.engine, args.lang, on_step=lambda n: _step(f"{n}: проверка…"))
+    _step("готово")
     if args.installed:
         voices = [v for v in voices if v.installed]
     defaults = {lang: default_voice(lang) for lang in LANGS}
@@ -205,8 +211,11 @@ def cmd_default(args) -> int:
 def cmd_doctor(args) -> int:
     from .core import doctor, verify_models
 
+    if args.verify:
+        _step("проверка sha256 моделей…")
     checked = verify_models() if args.verify else None  # сначала проверка: битые удаляются и пропадают из статуса
-    info = doctor()
+    _step("состояние движков")
+    info = doctor(on_step=lambda n: _step(f"{n}…"))
     if checked is not None:
         info["verify"] = checked
     info["server"] = {"url": server_url(), "running": server_alive()}
@@ -383,6 +392,8 @@ def main(argv=None) -> int:
             if hasattr(stream, "reconfigure"):
                 stream.reconfigure(encoding="utf-8")
     args = build_parser().parse_args(argv)
+    if args.cmd in ("voices", "doctor", "setup", "download", "say"):
+        _step(f"команда {args.cmd}")
     try:
         return args.fn(args)
     except KeyboardInterrupt:

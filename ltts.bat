@@ -1,8 +1,10 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
+set "PYTHONUNBUFFERED=1"
 
 set "ROOT=%~dp0"
+set "LTTS_DATA=%LOCALAPPDATA%\ltts"
 set "ROOT=%ROOT:~0,-1%"
 if exist "%ROOT%\pyproject.toml" set "REPO=%ROOT%"
 
@@ -98,19 +100,57 @@ echo   0  Выход
 echo.
 set "CHO="
 set /p CHO=Выбор: 
+set "CHO=!CHO: =!"
+if "!CHO!"=="" goto menu
 if "!CHO!"=="0" exit /b 0
 if "!CHO!"=="1" goto menu_say
 if "!CHO!"=="2" goto menu_serve
-if "!CHO!"=="3" call :run doctor & pause & goto menu
-if "!CHO!"=="4" call :run voices -i & pause & goto menu
-if "!CHO!"=="5" call :run voices & pause & goto menu
-if "!CHO!"=="6" call :run setup --no-rhvoice & pause & goto menu
+if "!CHO!"=="3" call :menu_exec doctor & goto menu
+if "!CHO!"=="4" call :menu_exec voices -i & goto menu
+if "!CHO!"=="5" call :menu_exec voices & goto menu
+if "!CHO!"=="6" call :menu_exec setup --no-rhvoice & goto menu
 if "!CHO!"=="7" goto menu_download
 if "!CHO!"=="8" goto menu_default
-if "!CHO!"=="9" call :do_install & pause & goto menu
-if "!CHO!"=="10" call :run --version & pause & goto menu
+if "!CHO!"=="9" call :do_install & echo. & pause & goto menu
+if "!CHO!"=="10" call :menu_exec --version & goto menu
 if "!CHO!"=="11" goto menu_mcp
+echo.
+echo  Неизвестный пункт "!CHO!". Введите число от 0 до 11.
+timeout /t 2 >nul
 goto menu
+
+:menu_exec
+cls
+echo.
+echo  ltts %*
+echo  ────────────────────────────────────────────────────
+call :ready_hint
+echo  Ход выполнения — строки с ^→ ниже.
+echo  ────────────────────────────────────────────────────
+echo.
+call :run %*
+set "EC=!ERRORLEVEL!"
+if "!EC!"=="0" call :mark_ready
+echo.
+if not "!EC!"=="0" echo  [завершено с ошибкой, код !EC!]
+echo.
+pause
+exit /b 0
+
+:ready_hint
+set "LTTS_READY=0"
+if exist "%LTTS_DATA%\config.json" set "LTTS_READY=1"
+if exist "%LTTS_DATA%\models" set "LTTS_READY=1"
+if "!LTTS_READY!"=="1" (
+  echo  Загрузка движков — обычно несколько секунд.
+) else (
+  echo  Первый запуск: до 1-2 минут, пока скачаются зависимости.
+)
+exit /b 0
+
+:mark_ready
+if not exist "%LTTS_DATA%" mkdir "%LTTS_DATA%" 2>nul
+exit /b 0
 
 :menu_say
 set "TEXT="
@@ -122,11 +162,15 @@ if "!TEXT!"=="" (
 )
 set "VOICE="
 set /p VOICE=Голос (Enter = по умолчанию, напр. piper:irina): 
+echo.
+echo  Синтез речи (подождите)...
+echo.
 if not "!VOICE!"=="" (
   call :run say "!TEXT!" -v !VOICE! --play
 ) else (
   call :run say "!TEXT!" --play
 )
+echo.
 pause
 goto menu
 
@@ -144,17 +188,14 @@ if "!VID!"=="" (
   pause
   goto menu
 )
-call :run download !VID!
-pause
+call :menu_exec download !VID!
 goto menu
 
 :menu_default
-call :run default
-echo.
+call :menu_exec default
 set "SETV="
-set /p SETV=Задать голос (engine:voice) или Enter — назад: 
-if not "!SETV!"=="" call :run default "!SETV!"
-pause
+set /p SETV=Задать голос (engine:voice) или Enter — в меню: 
+if not "!SETV!"=="" call :menu_exec default "!SETV!"
 goto menu
 
 :menu_mcp
@@ -180,11 +221,12 @@ if defined REPO where uv >nul 2>&1 && set "LTTS=uv run ltts"
 exit /b 0
 
 :run
-if "!LTTS!"=="ltts" (
+if /i "!LTTS!"=="ltts" (
   ltts %*
   exit /b !ERRORLEVEL!
 )
-if defined REPO (
+if /i "!LTTS!"=="uv run ltts" (
+  if not defined REPO exit /b 1
   pushd "%REPO%"
   uv run ltts %*
   set "EC=!ERRORLEVEL!"
