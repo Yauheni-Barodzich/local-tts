@@ -5,7 +5,10 @@ from xml.sax.saxutils import escape
 from ..audio import Audio
 from ..paths import MODELS
 from ..text import chunks, numbers_to_words
-from .base import Engine, EngineError, ModelError, Voice, ensure_valid, fetch, invalidate
+from .base import Engine, EngineError, ModelError, Voice, ensure_valid, fetch_urls, invalidate
+
+# models.silero.ai иногда отдаёт просроченный SSL; fetch_urls + fallback в base._urlopen
+SILERO_BASE = "https://models.silero.ai/models/tts"
 
 # язык -> (модель, {голос: пол}); у английской модели 118 безымянных дикторов,
 # в каталоге — по три явно мужских/женских (отобраны по высоте голоса), остальные en_N тоже работают
@@ -78,7 +81,7 @@ class Silero(Engine):
         lang = self._lang(voice)
         if not self._ok(lang):
             model = MODELS_BY_LANG[lang][0]
-            fetch(f"https://models.silero.ai/models/tts/{model}.pt", self._path(lang), f"silero:{model}")
+            fetch_urls([f"{SILERO_BASE}/{model}.pt"], self._path(lang), f"silero:{model}")
 
     def _load(self, lang: str):
         if lang not in self._models:

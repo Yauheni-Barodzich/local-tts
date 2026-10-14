@@ -88,7 +88,9 @@ def cmd_say(args) -> int:
         if not voice or not voice.startswith(("clone:", "clonehq:")):
             raise RuntimeError("--hq работает только с клонированными голосами: -v clone:<имя> --hq")
         voice = "clonehq:" + voice.split(":", 1)[1]
+    _step("синтез речи")
     data, meta = synth_auto(text, voice, args.speed, fmt, args.lang, args.rate, args.local, args.timeout)
+    _step("готово")
 
     if to_stdout:
         sys.stdout.buffer.write(data)
@@ -144,6 +146,7 @@ def cmd_download(args) -> int:
         ids += [v.id for v in ENGINES[e].voices()]
     results, failed = [], 0
     for vid in dict.fromkeys(ids):
+        _step(f"скачивание {vid}")
         try:
             v = download(vid, args.force)
             results.append({"id": v.id, "ok": True})
@@ -242,28 +245,37 @@ def cmd_doctor(args) -> int:
 
 
 def cmd_serve(args) -> int:
+    import socket
     import threading
     import webbrowser
 
+    _step("подготовка HTTP-сервера")
+    _step("загрузка веб-приложения (10–30 с, torch/FastAPI)")
     import uvicorn
 
     from .server import app
 
-    import socket
+    _step("приложение загружено")
 
     url = f"http://{args.host}:{args.port}"
     if server_alive(url, timeout=1):
+        _step(f"уже запущен: {url}")
         print(f"ltts уже запущен: {url} — переиспользуй его (CLI и MCP подхватят сами)", file=sys.stderr)
+        if args.open:
+            webbrowser.open(url)
         return 0
+    _step(f"проверка порта {args.port}")
     with socket.socket() as sock:
         try:
             sock.bind((args.host, args.port))
         except OSError:
             raise RuntimeError(f"порт {args.port} занят другим процессом — `ltts serve --port <другой>` и LTTS_URL для клиентов") from None
+    _step(f"слушаю {url}  (Ctrl+C — остановка)")
     print(f"ltts: {url}  (OpenAI API: {url}/v1/audio/speech)", file=sys.stderr)
     if args.open:
+        _step("браузер откроется через 1 с")
         threading.Timer(1.0, webbrowser.open, [url]).start()
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     return 0
 
 
@@ -293,7 +305,9 @@ def cmd_setup(args) -> int:
 
     targets = [v for v in downloads_for_platform() if (not v.startswith("rhvoice:") or (rhv and rhv.bin.exists()))
                and ENGINES[v.split(":")[0]].installable()]
+    _step(f"голосов к установке: {len(targets)}")
     for vid in targets:
+        _step(f"скачивание {vid}")
         try:
             download(vid)
             print(f"✓ {vid}", file=sys.stderr)
@@ -392,7 +406,7 @@ def main(argv=None) -> int:
             if hasattr(stream, "reconfigure"):
                 stream.reconfigure(encoding="utf-8")
     args = build_parser().parse_args(argv)
-    if args.cmd in ("voices", "doctor", "setup", "download", "say"):
+    if args.cmd in ("voices", "doctor", "setup", "download", "say", "serve"):
         _step(f"команда {args.cmd}")
     try:
         return args.fn(args)

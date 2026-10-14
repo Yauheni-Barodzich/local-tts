@@ -2,10 +2,12 @@ import hashlib
 import json
 import os
 import shutil
+import ssl
 import sys
 import tarfile
 import tempfile
 import threading
+import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -144,6 +146,36 @@ def verify(path: Path) -> bool:
         return False
 
 
+def _ssl_strict() -> bool:
+    return os.environ.get("LTTS_SSL_VERIFY", "").strip().lower() in ("1", "true", "yes", "strict")
+
+
+def _urlopen(req: urllib.request.Request, timeout: int = 60):
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except (urllib.error.URLError, ssl.SSLError) as e:
+        if _ssl_strict() or "certificate" not in str(e).lower():
+            raise
+        print(
+            "  ! просроченный или неверный SSL-сертификат — повтор загрузки без проверки "
+            "(отключить: LTTS_SSL_VERIFY=1)",
+            file=sys.stderr,
+            flush=True,
+        )
+        return urllib.request.urlopen(req, timeout=timeout, context=ssl._create_unverified_context())
+
+
+def fetch_urls(urls: list[str], dest: Path, label: str = "") -> Path:
+    """Пробует url по порядку; удобно для зеркал."""
+    err: Exception | None = None
+    for url in urls:
+        try:
+            return fetch(url, dest, label)
+        except EngineError as e:
+            err = e
+    raise err or EngineError("не заданы URL для загрузки")
+
+
 def fetch(url: str, dest: Path, label: str = "") -> Path:
     """Скачивает url в dest: свой .part на процесс, проверка длины, sha256, атомарный rename, маркер .complete."""
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -151,7 +183,7 @@ def fetch(url: str, dest: Path, label: str = "") -> Path:
     req = urllib.request.Request(url, headers={"User-Agent": "ltts"})
     h = hashlib.sha256()
     try:
-        with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
+        with _urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
             total = int(r.headers.get("Content-Length") or 0)
             done = 0
             while chunk := r.read(1 << 20):
