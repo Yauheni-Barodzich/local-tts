@@ -84,7 +84,7 @@ def add(name: str, data: bytes, text: str = "", gender: str = "", overwrite: boo
     tmp.mkdir(parents=True)
     sf.write(tmp / "ref.wav", audio.samples, REF_RATE, subtype="PCM_16")
     clone = Clone(slug, name.strip(), text.strip(), gender, round(audio.duration, 2), time.strftime("%Y-%m-%dT%H:%M:%S"))
-    (tmp / "meta.json").write_text(json.dumps(clone.to_dict(), ensure_ascii=False, indent=1))
+    (tmp / "meta.json").write_text(json.dumps(clone.to_dict(), ensure_ascii=False, indent=1), encoding="utf-8")
     shutil.rmtree(d, ignore_errors=True)
     tmp.rename(d)
     return clone
@@ -92,7 +92,7 @@ def add(name: str, data: bytes, text: str = "", gender: str = "", overwrite: boo
 
 def get(slug: str) -> Clone | None:
     try:
-        meta = json.loads((VOICES_DIR / slug / "meta.json").read_text())
+        meta = json.loads((VOICES_DIR / slug / "meta.json").read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         return None
     c = Clone(**{k: v for k, v in meta.items() if k in Clone.__dataclass_fields__})

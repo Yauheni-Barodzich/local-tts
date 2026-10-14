@@ -60,7 +60,7 @@ class Piper(Engine):
 
     def _ok(self, voice: str) -> bool:
         m = self._model(voice)
-        cfg_ok = ensure_valid(m.with_suffix(".onnx.json"), lambda p: json.loads(p.read_text())["audio"]["sample_rate"])
+        cfg_ok = ensure_valid(m.with_suffix(".onnx.json"), lambda p: json.loads(p.read_text(encoding="utf-8"))["audio"]["sample_rate"])
         return cfg_ok and ensure_valid(m, _onnx_ok)
 
     def voices(self):
@@ -97,5 +97,5 @@ class Piper(Engine):
             chunks = [c.audio_float_array for c in pv.synthesize(text, syn_config=cfg)]
         if not chunks:
             raise EngineError("piper вернул пустое аудио")
-        rate = json.loads(self._model(voice).with_suffix(".onnx.json").read_text())["audio"]["sample_rate"]
+        rate = json.loads(self._model(voice).with_suffix(".onnx.json").read_text(encoding="utf-8"))["audio"]["sample_rate"]
         return Audio(np.concatenate(chunks).astype(np.float32), rate)

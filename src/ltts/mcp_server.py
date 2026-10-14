@@ -7,7 +7,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from .cli import play
 from .client import synth_auto
-from .core import all_voices, default_voice, ordered, out_path
+from .core import ENGINE_NAMES, all_voices, default_voice, ordered, out_path
 from .text import LANGS
 
 mcp = MCPServer(
@@ -58,7 +58,7 @@ def list_voices(engine: str | None = None, lang: str | None = None, installed_on
     try:
         voices = [v.to_dict() for v in all_voices(engine, lang) if v.installed or not installed_only]
     except KeyError:
-        raise ToolError("engine должен быть silero, piper или rhvoice") from None
+        raise ToolError(f"engine должен быть одним из: {', '.join(ENGINE_NAMES)}") from None
     return {"defaults": {lg: default_voice(lg) for lg in LANGS}, "voices": voices}
 
 
@@ -70,6 +70,9 @@ def clone_voice(name: str, audio_path: str, text: str = "", gender: str = "", ov
     Клонируй только свой голос или с явного согласия владельца.
     """
     from pathlib import Path as _P
+
+    if "clone" not in ENGINE_NAMES:
+        raise ToolError("клонирование голоса доступно только на Mac с Apple Silicon")
 
     from . import clones
 

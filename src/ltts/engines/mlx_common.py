@@ -41,7 +41,7 @@ def repo_ok(repo: str) -> bool:
     """Скачан полностью: маркер есть и размеры всех файлов совпадают."""
     d = _repo_dir(repo)
     try:
-        files = json.loads(_marker(d).read_text())
+        files = json.loads(_marker(d).read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         return False
     return all((d / f).exists() and (d / f).stat().st_size == size for f, size in files.items())
@@ -62,7 +62,7 @@ def fetch_repo(repo: str) -> Path:
         for p in d.rglob("*")
         if p.is_file() and ".cache" not in p.parts and p.name != _marker(d).name
     }
-    _marker(d).write_text(json.dumps(files))
+    _marker(d).write_text(json.dumps(files), encoding="utf-8")
     return d
 
 

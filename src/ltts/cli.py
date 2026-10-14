@@ -13,8 +13,6 @@ from .client import DEFAULT_TIMEOUT, server_alive, server_url, synth_auto
 from .paths import DEFAULT_HOST, DEFAULT_PORT
 from .text import LANGS
 
-ENGINE_NAMES = ["silero", "piper", "rhvoice", "kokoro", "clone", "clonehq"]
-
 EXAMPLES = """
 примеры:
   ltts say "Привет, мир" --play
@@ -131,11 +129,11 @@ def cmd_voices(args) -> int:
 
 
 def cmd_download(args) -> int:
-    from .core import DEFAULT_DOWNLOADS, ENGINES, download
+    from .core import ENGINES, download, downloads_for_platform
 
     ids = list(args.voices)
     if args.defaults or not ids:
-        ids += DEFAULT_DOWNLOADS
+        ids += downloads_for_platform()
     for e in args.all or []:
         ids += [v.id for v in ENGINES[e].voices()]
     results, failed = [], 0
@@ -157,6 +155,10 @@ def cmd_download(args) -> int:
 
 def cmd_clone(args) -> int:
     from . import clones
+    from .core import ENGINES
+
+    if "clone" not in ENGINES:
+        raise RuntimeError("клонирование голоса доступно только на Mac с Apple Silicon")
 
     if args.action in ("add", "rm") and not args.name:
         raise RuntimeError(f"ltts clone {args.action} <имя>" + (" <образец.wav>" if args.action == "add" else ""))
@@ -218,7 +220,7 @@ def cmd_doctor(args) -> int:
             mark = "✓" if e["ok"] else "✗"
             voices = ", ".join(v.split(":")[1] for v in e["installed_voices"]) or "голосов нет"
             print(f"  {mark} {name:<8} {voices}")
-            if e["hint"]:
+            if e["hint"] and not e["ok"] and e["installable"]:
                 print(f"      → {e['hint']}")
         srv = info["server"]
         print(f"сервер: {srv['url']} — {'запущен' if srv['running'] else 'не запущен (`ltts serve`)'}")
@@ -265,22 +267,22 @@ def cmd_mcp(args) -> int:
 
 def cmd_setup(args) -> int:
     """Первичная настройка: голоса по умолчанию + сборка RHVoice."""
-    from .core import ENGINES, download
-    from .engines.rhvoice import build
+    from .core import ENGINES, download, downloads_for_platform
 
-    rhv = ENGINES["rhvoice"]
-    if args.rhvoice and not rhv.bin.exists() and not rhv.installable():
-        print(f"→ RHVoice пропускаю: {rhv.status()[1]}", file=sys.stderr)
-    elif args.rhvoice and not rhv.bin.exists():
-        print("→ собираю RHVoice (1–3 минуты)…", file=sys.stderr)
-        try:
-            build(["anna", "aleksandr"])
-        except Exception as e:
-            print(f"✗ RHVoice: {e}\n  остальные движки работают; повторить: `ltts setup --rhvoice`", file=sys.stderr)
-    from .core import DEFAULT_DOWNLOADS
+    rhv = ENGINES.get("rhvoice")
+    if rhv and args.rhvoice:
+        from .engines.rhvoice import build
 
-    # только то, что можно поставить на этой платформе (Kokoro — Apple Silicon, RHVoice — если собрался)
-    targets = [v for v in DEFAULT_DOWNLOADS if (not v.startswith("rhvoice:") or rhv.bin.exists())
+        if not rhv.bin.exists() and not rhv.installable():
+            print(f"→ RHVoice пропускаю: {rhv.status()[1]}", file=sys.stderr)
+        elif not rhv.bin.exists():
+            print("→ собираю RHVoice (1–3 минуты)…", file=sys.stderr)
+            try:
+                build(["anna", "aleksandr"])
+            except Exception as e:
+                print(f"✗ RHVoice: {e}\n  остальные движки работают; повторить: `ltts setup --rhvoice`", file=sys.stderr)
+
+    targets = [v for v in downloads_for_platform() if (not v.startswith("rhvoice:") or (rhv and rhv.bin.exists()))
                and ENGINES[v.split(":")[0]].installable()]
     for vid in targets:
         try:
@@ -296,6 +298,7 @@ def cmd_setup(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     from . import __version__
+    from .core import ENGINE_NAMES
 
     p = argparse.ArgumentParser(
         prog="ltts",
@@ -338,15 +341,16 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_download)
 
-    s = sub.add_parser("clone", help="клонирование голоса: add / list / rm (Apple Silicon)")
-    s.add_argument("action", choices=["add", "list", "rm"])
-    s.add_argument("name", nargs="?", help="имя голоса (для add/rm)")
-    s.add_argument("audio", nargs="?", help="образец речи 8–20 с: wav/mp3/flac/ogg или '-' для stdin")
-    s.add_argument("--text", help="что сказано в образце (нужно для --hq, улучшает похожесть)")
-    s.add_argument("--gender", choices=["female", "male"])
-    s.add_argument("--force", action="store_true", help="перезаписать существующий")
-    s.add_argument("--json", action="store_true")
-    s.set_defaults(fn=cmd_clone)
+    if "clone" in ENGINE_NAMES:
+        s = sub.add_parser("clone", help="клонирование голоса: add / list / rm (Apple Silicon)")
+        s.add_argument("action", choices=["add", "list", "rm"])
+        s.add_argument("name", nargs="?", help="имя голоса (для add/rm)")
+        s.add_argument("audio", nargs="?", help="образец речи 8–20 с: wav/mp3/flac/ogg или '-' для stdin")
+        s.add_argument("--text", help="что сказано в образце (нужно для --hq, улучшает похожесть)")
+        s.add_argument("--gender", choices=["female", "male"])
+        s.add_argument("--force", action="store_true", help="перезаписать существующий")
+        s.add_argument("--json", action="store_true")
+        s.set_defaults(fn=cmd_clone)
 
     s = sub.add_parser("default", help="показать/задать голос по умолчанию (для языка этого голоса)")
     s.add_argument("voice", nargs="?")

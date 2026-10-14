@@ -8,15 +8,31 @@ from pathlib import Path
 
 from .audio import Audio
 from .engines.base import Engine, EngineError, ModelError, Voice
-from .engines.clone import make_engines as clone_engines
-from .engines.kokoro import Kokoro
 from .engines.piper import Piper
-from .engines.rhvoice import RHVoice
 from .engines.silero import Silero
-from .paths import CONFIG, OUT
+from .paths import CONFIG, IS_WINDOWS, OUT
 from .text import LANGS, detect_lang
 
-ENGINES: dict[str, Engine] = {e.name: e for e in (Silero(), Piper(), RHVoice(), Kokoro(), *clone_engines())}
+
+def _build_engines() -> dict[str, Engine]:
+    """Только движки, которые реально можно использовать на этой ОС."""
+    from .engines.mlx_common import APPLE_SILICON
+
+    instances: list[Engine] = [Silero(), Piper()]
+    if not IS_WINDOWS:
+        from .engines.rhvoice import RHVoice
+
+        instances.append(RHVoice())
+    if APPLE_SILICON:
+        from .engines.clone import make_engines as clone_engines
+        from .engines.kokoro import Kokoro
+
+        instances.extend([Kokoro(), *clone_engines()])
+    return {e.name: e for e in instances}
+
+
+ENGINES: dict[str, Engine] = _build_engines()
+ENGINE_NAMES: list[str] = list(ENGINES)
 # порядок предпочтения по языкам: дефолтный голос, выбор голоса движка, замена голоса под язык текста
 PREFERRED = {
     "ru": ["silero:xenia", "piper:irina", "rhvoice:anna", "silero:aidar", "piper:denis", "rhvoice:aleksandr"],
@@ -33,16 +49,20 @@ DEFAULT_DOWNLOADS = [
 ]  # fmt: skip
 
 
+def downloads_for_platform() -> list[str]:
+    return [v for v in DEFAULT_DOWNLOADS if v.split(":", 1)[0] in ENGINES]
+
+
 def load_config() -> dict:
     try:
-        return json.loads(CONFIG.read_text())
+        return json.loads(CONFIG.read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         return {}
 
 
 def save_config(cfg: dict) -> None:
     CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=2))
+    CONFIG.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def all_voices(engine: str | None = None, lang: str | None = None) -> list[Voice]:
@@ -63,12 +83,14 @@ def default_voice(lang: str = "ru") -> str:
         return explicit
     for vid in PREFERRED[lang]:
         eng, name = vid.split(":")
+        if eng not in ENGINES:
+            continue
         if ENGINES[eng].status()[0] and ENGINES[eng].is_installed(name):
             return vid
     installed = [v.id for v in all_voices(lang=lang) if v.installed and v.lang == lang]
     if installed:
         return installed[0]
-    usable = [p for p in PREFERRED[lang] if ENGINES[p.split(":")[0]].installable()]  # не kokoro на Linux
+    usable = [p for p in PREFERRED[lang] if p.split(":")[0] in ENGINES and ENGINES[p.split(":")[0]].installable()]
     return (usable or PREFERRED[lang])[0]
 
 
@@ -140,6 +162,8 @@ def synthesize(
         else:  # у движка нет этого языка (kokoro + немецкий) — лучший голос того же пола из других движков
             for vid in PREFERRED[lang]:
                 e, n = vid.split(":")
+                if e not in ENGINES:
+                    continue
                 cand = ENGINES[e].voice(n)
                 if cand and ENGINES[e].installable() and (not info.gender or cand.gender == info.gender):
                     eng, name = ENGINES[e], n

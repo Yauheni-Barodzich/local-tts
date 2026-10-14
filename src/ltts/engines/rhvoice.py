@@ -59,7 +59,7 @@ class RHVoice(Engine):
         info = self.data / "voices" / voice / "voice.info"
         if not info.exists():
             return {}
-        return dict(line.split("=", 1) for line in info.read_text().splitlines() if "=" in line)
+        return dict(line.split("=", 1) for line in info.read_text(encoding="utf-8").splitlines() if "=" in line)
 
     def _installed(self, voice: str) -> bool:
         lang = CATALOG[voice][0]

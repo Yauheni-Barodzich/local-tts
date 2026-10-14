@@ -380,8 +380,11 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("ltts." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("ltts." + k, JSON.stringify(v)); } catch {} },
 };
-const ENGINE_TITLES = { silero: "Silero", piper: "Piper", rhvoice: "RHVoice", kokoro: "Kokoro" };
-const PILLS = { ...ENGINE_TITLES, clone: "Клоны" };
+const ENGINE_LABELS = {
+  silero: "Silero", piper: "Piper", rhvoice: "RHVoice", kokoro: "Kokoro", clone: "Клоны", clonehq: "Клоны HQ",
+};
+const engineLabel = (n) => ENGINE_LABELS[n] || state.engines[n]?.title || n;
+const catalogEngines = () => Object.keys(state.engines).filter((e) => !e.startsWith("clone"));
 // что качается при первом использовании — для понятного прогресса
 const FIRST_USE = {
   kokoro: "Скачиваю Kokoro (~350 МБ)",
@@ -436,17 +439,21 @@ async function load() {
   const [v, s, c] = await Promise.all(["/api/voices", "/api/status", "/api/clones"].map((u) => fetch(u).then((r) => r.json())));
   Object.assign(state, { voices: v.voices, defaults: v.defaults, engines: s.engines,
     clones: Object.fromEntries(c.clones.map((x) => [x.slug, x])) });
-  $("cloneOpen").hidden = engineState("clone") === "bad";
+  $("cloneOpen").hidden = !("clone" in state.engines);
   renderEngines(); renderVoices();
 }
-const engineState = (n) => { const e = state.engines[n] || {}; return e.ok ? "ok" : e.installable ? "warn" : "bad"; };
+const engineState = (n) => {
+  const e = state.engines[n];
+  if (!e) return "ok";
+  return e.ok ? "ok" : e.installable ? "warn" : "bad";
+};
 
 function renderEngines() {
   const label = { ok: "работает", warn: "соберётся при первом использовании", bad: "недоступен" };
-  $("engines").innerHTML = Object.keys(PILLS).map((n) => {
-    const st = engineState(n), e = state.engines[n] || {};
+  $("engines").innerHTML = Object.keys(state.engines).map((n) => {
+    const st = engineState(n), e = state.engines[n];
     const title = (e.hint || label[st]).replace(/"/g, "&quot;");
-    return `<span class="pill ${st}" title="${title}"><span class="dot" aria-hidden="true"></span>${PILLS[n]}<span class="sr-only">: ${label[st]}</span></span>`;
+    return `<span class="pill ${st}" title="${title}"><span class="dot" aria-hidden="true"></span>${engineLabel(n)}<span class="sr-only">: ${label[st]}</span></span>`;
   }).join("");
 }
 
@@ -460,7 +467,7 @@ function renderVoices() {
   let html = "", total = 0;
   const pass = (v) => gender === "all" || v.gender === gender;
   // «Мои голоса» — клоны говорят на любом языке, поэтому видны в обеих вкладках
-  if (engineState("clone") !== "bad") {
+  if ("clone" in state.engines) {
     const mine = state.voices.filter((v) => v.engine === "clone" && pass(v));
     html += '<div class="group-title">Мои голоса</div>';
     if (!mine.length) html += `<div class="clone-empty">${Object.keys(state.clones).length ? "Нет клонов с этим полом" : "Пока нет — нажмите «Клонировать голос»"}</div>`;
@@ -474,12 +481,12 @@ function renderVoices() {
         <button type="button" class="del" data-slug="${v.name}" aria-label="Удалить голос ${name}" title="Удалить">${icon("trash")}</button></span></label>`;
     }
   }
-  for (const eng of Object.keys(ENGINE_TITLES)) {
+  for (const eng of catalogEngines()) {
     const list = state.voices.filter((v) => v.engine === eng && v.lang === lang && pass(v));
     if (!list.length) continue;
     const st = engineState(eng);
-    const note = st === "warn" ? "<small>соберётся ~2 мин</small>" : st === "bad" ? "<small>недоступен</small>" : "";
-    html += `<div class="group-title">${ENGINE_TITLES[eng]}${note}</div>`;
+    const note = st === "warn" ? "<small>соберётся ~2 мин</small>" : "";
+    html += `<div class="group-title">${engineLabel(eng)}${note}</div>`;
     for (const v of list) {
       total++;
       const pending = st === "warn" ? "build" : v.installed ? "" : "download";

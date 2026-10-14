@@ -95,7 +95,7 @@ def _sha256(path: Path) -> str:
 
 def mark_complete(path: Path, sha256: str | None = None, url: str = "") -> None:
     info = {"size": path.stat().st_size, "sha256": sha256 or _sha256(path), "url": url}
-    _marker(path).write_text(json.dumps(info))
+    _marker(path).write_text(json.dumps(info), encoding="utf-8")
 
 
 def is_complete(path: Path) -> bool | None:
@@ -103,7 +103,7 @@ def is_complete(path: Path) -> bool | None:
     if not path.exists():
         return False
     try:
-        info = json.loads(_marker(path).read_text())
+        info = json.loads(_marker(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return None
     except ValueError:
@@ -138,7 +138,7 @@ def ensure_valid(path: Path, check) -> bool:
 def verify(path: Path) -> bool:
     """Полная проверка sha256 по маркеру."""
     try:
-        info = json.loads(_marker(path).read_text())
+        info = json.loads(_marker(path).read_text(encoding="utf-8"))
         return path.exists() and info.get("size") == path.stat().st_size and info.get("sha256") == _sha256(path)
     except (FileNotFoundError, ValueError):
         return False
