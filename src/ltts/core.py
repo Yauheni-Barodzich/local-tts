@@ -16,18 +16,11 @@ from .text import LANGS, detect_lang
 
 def _build_engines() -> dict[str, Engine]:
     """Только движки, которые реально можно использовать на этой ОС."""
-    from .engines.mlx_common import APPLE_SILICON
-
     instances: list[Engine] = [Silero(), Piper()]
     if not IS_WINDOWS:
         from .engines.rhvoice import RHVoice
 
         instances.append(RHVoice())
-    if APPLE_SILICON:
-        from .engines.clone import make_engines as clone_engines
-        from .engines.kokoro import Kokoro
-
-        instances.extend([Kokoro(), *clone_engines()])
     return {e.name: e for e in instances}
 
 
@@ -36,15 +29,14 @@ ENGINE_NAMES: list[str] = list(ENGINES)
 # порядок предпочтения по языкам: дефолтный голос, выбор голоса движка, замена голоса под язык текста
 PREFERRED = {
     "ru": ["silero:kseniya", "silero:xenia", "piper:irina", "rhvoice:anna", "silero:aidar", "piper:denis", "rhvoice:aleksandr"],
-    "en": ["kokoro:af_heart", "silero:en_0", "piper:lessac", "rhvoice:slt",
-           "kokoro:am_michael", "silero:en_2", "piper:ryan", "rhvoice:bdl"],
+    "en": ["silero:en_0", "piper:lessac", "rhvoice:slt", "silero:en_2", "piper:ryan", "rhvoice:bdl"],
     # по замеру Whisper: silero:eva_k 3.8% WER, thorsten — самый естественный мужской; kerstin/ramona (low) — хуже
     "de": ["silero:eva_k", "piper:thorsten", "silero:karlsson", "silero:hokuspokus", "piper:eva_k", "piper:pavoque",
            "silero:bernd_ungerer", "piper:kerstin"],
 }  # fmt: skip
 DEFAULT_DOWNLOADS = [
     "silero:kseniya", "piper:irina", "piper:denis", "rhvoice:anna", "rhvoice:aleksandr",
-    "kokoro:af_heart", "silero:en_0", "piper:lessac", "piper:ryan", "rhvoice:slt", "rhvoice:bdl",
+    "silero:en_0", "piper:lessac", "piper:ryan", "rhvoice:slt", "rhvoice:bdl",
     "silero:eva_k", "piper:thorsten",
 ]  # fmt: skip
 
@@ -126,7 +118,7 @@ def resolve(voice: str | None, lang: str = "ru") -> tuple[Engine, str]:
         eng = ENGINES[voice]
         name = engine_voice(eng, lang) or engine_voice(eng, "ru") or next((v.name for v in eng.voices()), None)
         if not name:
-            raise EngineError(f"у {eng.name} пока нет голосов" + (" — `ltts clone add <имя> <образец.wav>`" if eng.name.startswith("clone") else ""))
+            raise EngineError(f"у {eng.name} пока нет голосов")
         return eng, name
     matches = [v for v in all_voices() if v.name == voice]
     if not matches:
@@ -166,7 +158,7 @@ def synthesize(
         swap = engine_voice(eng, lang, info.gender) or engine_voice(eng, lang)
         if swap:
             name = swap
-        else:  # у движка нет этого языка (kokoro + немецкий) — лучший голос того же пола из других движков
+        else:  # у движка нет этого языка — лучший голос того же пола из других движков
             for vid in PREFERRED[lang]:
                 e, n = vid.split(":")
                 if e not in ENGINES:

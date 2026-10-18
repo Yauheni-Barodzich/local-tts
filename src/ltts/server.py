@@ -2,9 +2,7 @@
 
 import json
 from importlib.resources import files
-from typing import Annotated
-
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
@@ -129,57 +127,6 @@ def api_download(body: dict):
         return download(body["voice"], bool(body.get("force"))).to_dict()
     except EngineError as e:
         raise _api_error_from(e) from e
-
-
-# ---------- клонированные голоса ----------
-
-
-@app.get("/api/clones")
-def api_clones():
-    from . import clones
-
-    return {"clones": [{"voice": f"clone:{c.slug}", **c.to_dict()} for c in clones.all_clones()]}
-
-
-@app.post("/api/clones")
-async def api_clone_add(
-    name: Annotated[str, Form()],
-    audio: Annotated[UploadFile, File()],
-    text: Annotated[str, Form()] = "",
-    gender: Annotated[str, Form()] = "",
-    overwrite: Annotated[bool, Form()] = False,
-):
-    from . import clones
-
-    data = await audio.read()
-    if len(data) > 25 * 1024 * 1024:
-        raise ApiError(413, "файл больше 25 МБ — нужен короткий образец 8–20 с", code="too_large")
-    try:
-        c = clones.add(name, data, text, gender, overwrite)
-    except EngineError as e:
-        raise _api_error_from(e) from e
-    return {"voice": f"clone:{c.slug}", **c.to_dict()}
-
-
-@app.get("/api/clones/{slug}/sample")
-def api_clone_sample(slug: str):
-    from . import clones
-
-    c = clones.get(slug)
-    if not c:
-        raise ApiError(404, f"нет голоса {slug!r}", code="not_found")
-    return Response(c.ref.read_bytes(), media_type="audio/wav")
-
-
-@app.delete("/api/clones/{slug}")
-def api_clone_delete(slug: str):
-    from . import clones
-
-    try:
-        clones.remove(slug)
-    except EngineError as e:
-        raise ApiError(404, str(e), code="not_found") from e
-    return {"ok": True}
 
 
 # ---------- OpenAI-совместимое API ----------

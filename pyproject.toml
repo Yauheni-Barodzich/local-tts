@@ -1,7 +1,7 @@
 [project]
 name = "ltts"
 version = "0.1.0"
-description = "Локальный синтез речи (Silero, Piper, RHVoice, Kokoro, клонирование голоса): CLI для агентов, MCP, OpenAI-совместимый API и веб-морда"
+description = "Локальный синтез речи (Silero, Piper, RHVoice): CLI для агентов, MCP, OpenAI-совместимый API и веб-морда"
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
@@ -15,10 +15,6 @@ dependencies = [
     "num2words>=0.5.14",
     "soxr>=1.1.0",
     "python-multipart>=0.0.9",
-    # Apple Silicon: Kokoro, OmniVoice (клонирование), VoxCPM2 (HQ) через MLX
-    "mlx-audio>=0.5.7; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "misaki[en]>=0.9.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl ; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
 
 [project.scripts]

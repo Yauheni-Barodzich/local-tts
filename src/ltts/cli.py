@@ -22,9 +22,7 @@ EXAMPLES = """
   ltts say "Привет, мир" --play
   echo "Текст из пайпа" | ltts say -v piper:denis -o out.mp3
   ltts say "Быстрее" -s 1.3 --json
-  ltts say "Hello from local TTS"   # английский — сам выберет английский голос (Kokoro)
-  ltts clone add me me.wav --text "что сказано в записи"
-  ltts say "Hello, it's me" -v clone:me [--hq]
+  ltts say "Hello from local TTS"   # английский — сам выберет английский голос
   ltts voices --installed
   ltts serve --open                 # веб-морда на http://127.0.0.1:8765
   claude mcp add ltts -- ltts mcp   # подключить как MCP-сервер
@@ -84,10 +82,6 @@ def cmd_say(args) -> int:
         raise RuntimeError("для aac нужен ffmpeg в PATH; mp3/ogg/opus/flac/wav работают без него")
 
     voice = args.voice
-    if args.hq:
-        if not voice or not voice.startswith(("clone:", "clonehq:")):
-            raise RuntimeError("--hq работает только с клонированными голосами: -v clone:<имя> --hq")
-        voice = "clonehq:" + voice.split(":", 1)[1]
     _step("синтез речи")
     data, meta = synth_auto(text, voice, args.speed, fmt, args.lang, args.rate, args.local, args.timeout)
     _step("готово")
@@ -160,39 +154,6 @@ def cmd_download(args) -> int:
     if args.json:
         print(json.dumps({"ok": not failed, "results": results}, ensure_ascii=False))
     return 1 if failed else 0
-
-
-def cmd_clone(args) -> int:
-    from . import clones
-    from .core import ENGINES
-
-    if "clone" not in ENGINES:
-        raise RuntimeError("клонирование голоса доступно только на Mac с Apple Silicon")
-
-    if args.action in ("add", "rm") and not args.name:
-        raise RuntimeError(f"ltts clone {args.action} <имя>" + (" <образец.wav>" if args.action == "add" else ""))
-    if args.action == "add" and not args.audio:
-        raise RuntimeError("укажи файл образца: ltts clone add <имя> <образец.wav>")
-
-    if args.action == "add":
-        data = sys.stdin.buffer.read() if args.audio == "-" else Path(args.audio).expanduser().read_bytes()
-        c = clones.add(args.name, data, args.text or "", args.gender or "", overwrite=args.force)
-        hint = "" if c.text else "  (без --text: обычный клон работает, для --hq нужен текст образца)"
-        emit(args, {"ok": True, "voice": f"clone:{c.slug}", **c.to_dict()},
-             f"✓ clone:{c.slug} — {c.duration:g} с образца{hint}")
-    elif args.action == "list":
-        items = clones.all_clones()
-        if args.json:
-            print(json.dumps({"clones": [{"voice": f"clone:{c.slug}", **c.to_dict()} for c in items]}, ensure_ascii=False))
-        else:
-            for c in items:
-                print(f"clone:{c.slug:<20} {c.duration:>5.1f} с  {c.gender or '—':<7} {'текст есть' if c.text else 'без текста (нет HQ)'}")
-            if not items:
-                print("клонов пока нет — `ltts clone add <имя> <образец.wav> [--text …]`", file=sys.stderr)
-    elif args.action == "rm":
-        clones.remove(clones.slugify(args.name))
-        emit(args, {"ok": True}, f"удалён {args.name}")
-    return 0
 
 
 def cmd_default(args) -> int:
@@ -325,7 +286,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = argparse.ArgumentParser(
         prog="ltts",
-        description="Локальный синтез речи (русский, английский, немецкий): Silero, Piper, RHVoice, Kokoro, клоны.",
+        description="Локальный синтез речи (русский, английский, немецкий): Silero, Piper, RHVoice.",
         epilog=EXAMPLES,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -342,7 +303,6 @@ def build_parser() -> argparse.ArgumentParser:
                    help="язык текста; auto (по умолчанию) — определить и подобрать голос того же движка и пола")
     s.add_argument("-p", "--play", action="store_true", help="проиграть после синтеза")
     s.add_argument("--json", action="store_true", help="метаданные в JSON")
-    s.add_argument("--hq", action="store_true", help="для клонов: VoxCPM2, 48 кГц, медленнее (нужен текст образца)")
     s.add_argument("-r", "--rate", type=int, help="частота на выходе, Гц (48000, 24000, …); по умолчанию родная у движка или LTTS_RATE")
     s.add_argument("--local", action="store_true", help="не использовать запущенный сервер")
     s.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT,
@@ -363,17 +323,6 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--force", action="store_true", help="удалить и скачать заново")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_download)
-
-    if "clone" in ENGINE_NAMES:
-        s = sub.add_parser("clone", help="клонирование голоса: add / list / rm (Apple Silicon)")
-        s.add_argument("action", choices=["add", "list", "rm"])
-        s.add_argument("name", nargs="?", help="имя голоса (для add/rm)")
-        s.add_argument("audio", nargs="?", help="образец речи 8–20 с: wav/mp3/flac/ogg или '-' для stdin")
-        s.add_argument("--text", help="что сказано в образце (нужно для --hq, улучшает похожесть)")
-        s.add_argument("--gender", choices=["female", "male"])
-        s.add_argument("--force", action="store_true", help="перезаписать существующий")
-        s.add_argument("--json", action="store_true")
-        s.set_defaults(fn=cmd_clone)
 
     s = sub.add_parser("default", help="показать/задать голос по умолчанию (для языка этого голоса)")
     s.add_argument("voice", nargs="?")

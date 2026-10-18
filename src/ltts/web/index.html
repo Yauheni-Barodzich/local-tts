@@ -140,42 +140,6 @@
   .voice .del { width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: none; color: var(--faint); border-radius: 6px; flex: none; }
   .voice .del:hover { color: var(--bad); background: var(--bad-soft); }
   .voice .del .icon { width: 15px; height: 15px; }
-  .clone-empty { padding: 8px 10px 4px; font-size: 13px; color: var(--faint); }
-  .switch { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); cursor: pointer; margin-top: 12px; padding: 8px 10px;
-    border-radius: var(--r-sm); background: var(--surface-2); }
-  .switch input { appearance: none; width: 36px; height: 20px; border-radius: 999px; background: var(--border-strong); position: relative; transition: background .15s; cursor: pointer; flex: none; margin: 0; }
-  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
-  .switch input:checked { background: var(--accent); }
-  .switch input:checked::after { transform: translateX(16px); }
-  .switch input:disabled { opacity: .45; cursor: not-allowed; }
-  .switch small { display: block; font-size: 12px; color: var(--faint); }
-
-  /* диалог клонирования */
-  dialog { border: 1px solid var(--border); border-radius: 16px; padding: 0; width: min(520px, calc(100vw - 32px)); background: var(--surface); color: var(--text);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
-  dialog::backdrop { background: rgba(15, 23, 42, .45); }
-  .dlg { padding: 20px; display: grid; gap: 16px; }
-  .dlg-head { display: flex; justify-content: space-between; align-items: center; }
-  .dlg-head h3 { margin: 0; font-size: 18px; }
-  .dlg .muted { margin: 0; font-size: 13px; color: var(--faint); }
-  .script { margin: 0; padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 15px; line-height: 1.55; }
-  .rec-row { display: flex; align-items: center; gap: 12px; }
-  .rec { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--rec); color: #fff; font-weight: 600; }
-  .rec .icon { width: 16px; height: 16px; }
-  .rec[aria-pressed="true"] { background: var(--text); color: var(--bg); }
-  .meter { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-  .meter i { display: block; height: 100%; width: 0; background: var(--ok); transition: width .08s linear; }
-  .rec-row time { font: 13px var(--mono); color: var(--faint); min-width: 3.5em; text-align: right; }
-  .dlg audio { width: 100%; height: 36px; }
-  .dlg input[type=text], .dlg textarea { width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); font-size: 15px; resize: vertical; }
-  .dlg input[type=file] { font-size: 14px; color: var(--muted); }
-  .f-label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-  .f-label small { font-weight: 400; color: var(--faint); }
-  .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); cursor: pointer; }
-  .check input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--accent); flex: none; }
-  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px; }
-  .dlg .error { margin: 0; }
-
   input[type=range] { width: 100%; accent-color: var(--accent); height: 24px; }
   .range-scale { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--faint); margin-top: -2px; }
 
@@ -293,10 +257,8 @@ curl -s localhost:8765/v1/audio/speech -H 'Content-Type: application/json' \
         </div>
       </div>
       <div class="field">
-        <div class="label-row"><div class="label" id="voiceLabel">Голос <span id="voiceCount"></span></div>
-          <button type="button" class="link-btn" id="cloneOpen" hidden><svg class="icon" data-i="plus"></svg>Клонировать голос</button></div>
+        <div class="label" id="voiceLabel">Голос <span id="voiceCount"></span></div>
         <div class="voices" id="voices" role="radiogroup" aria-labelledby="voiceLabel"><div class="empty-voices">Загружаю голоса…</div></div>
-        <label class="switch" id="hqRow" hidden><input type="checkbox" id="hq"><span>HQ · 48 кГц<small id="hqNote">VoxCPM2 — чище звук, медленнее</small></span></label>
       </div>
       <div class="field">
         <label class="label" for="speed">Скорость <output id="speedv" for="speed">1.00×</output></label>
@@ -312,39 +274,6 @@ curl -s localhost:8765/v1/audio/speech -H 'Content-Type: application/json' \
     </aside>
   </div>
 </div>
-
-<dialog id="cloneDlg" aria-labelledby="cloneTitle">
-  <div class="dlg">
-    <div class="dlg-head"><h3 id="cloneTitle">Клонировать голос</h3>
-      <button type="button" class="icon-btn" id="cloneClose" aria-label="Закрыть"><svg class="icon" data-i="x"></svg></button></div>
-    <div class="seg" id="srcSeg" role="group" aria-label="Источник образца">
-      <button type="button" data-v="rec">Записать</button><button type="button" data-v="file">Загрузить файл</button>
-    </div>
-    <div id="recPane">
-      <p class="muted">Прочитайте вслух обычным голосом, в тихой комнате (10–15 секунд):</p>
-      <p class="script" id="script"></p>
-      <div class="rec-row" style="margin-top:12px">
-        <button type="button" class="rec" id="recBtn" aria-pressed="false"></button>
-        <div class="meter" aria-hidden="true"><i id="meter"></i></div><time id="recTime">0:00</time>
-      </div>
-      <audio id="recPreview" controls hidden></audio>
-    </div>
-    <div id="filePane" hidden>
-      <input type="file" id="cloneFile" accept="audio/*,.wav,.mp3,.flac,.ogg">
-      <p class="muted" style="margin-top:6px">wav, mp3, flac или ogg · 8–20 секунд чистой речи без музыки и шума</p>
-    </div>
-    <div><label class="f-label" for="cloneName">Имя голоса</label><input type="text" id="cloneName" maxlength="40" placeholder="например, Никита"></div>
-    <div><div class="f-label" id="cgLabel">Пол <small>— для фильтра</small></div>
-      <div class="seg" id="cloneGender" role="group" aria-labelledby="cgLabel">
-        <button type="button" data-v="">Не указан</button><button type="button" data-v="female">Женский</button><button type="button" data-v="male">Мужской</button></div></div>
-    <div><label class="f-label" for="cloneText">Что сказано в записи <small>— нужно для HQ, улучшает похожесть</small></label>
-      <textarea id="cloneText" rows="2" placeholder="необязательно"></textarea></div>
-    <label class="check"><input type="checkbox" id="consent">Это мой голос, или у меня есть согласие его владельца</label>
-    <div class="error" id="cloneErr" role="alert" hidden></div>
-    <div class="dlg-foot"><button type="button" class="ghost" id="cloneCancel">Отмена</button>
-      <button type="button" class="cta" id="cloneSave"><span>Сохранить голос</span></button></div>
-  </div>
-</dialog>
 
 <script>
 // ---------- иконки (Lucide, MIT) ----------
@@ -380,17 +309,10 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("ltts." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("ltts." + k, JSON.stringify(v)); } catch {} },
 };
-const ENGINE_LABELS = {
-  silero: "Silero", piper: "Piper", rhvoice: "RHVoice", kokoro: "Kokoro", clone: "Клоны", clonehq: "Клоны HQ",
-};
+const ENGINE_LABELS = { silero: "Silero", piper: "Piper", rhvoice: "RHVoice" };
 const engineLabel = (n) => ENGINE_LABELS[n] || state.engines[n]?.title || n;
-const catalogEngines = () => Object.keys(state.engines).filter((e) => !e.startsWith("clone"));
-// что качается при первом использовании — для понятного прогресса
-const FIRST_USE = {
-  kokoro: "Скачиваю Kokoro (~350 МБ)",
-  clone: "Скачиваю модель клонирования OmniVoice (~1.5 ГБ)",
-  clonehq: "Скачиваю модель HQ VoxCPM2 (~3 ГБ)",
-};
+const catalogEngines = () => Object.keys(state.engines);
+const FIRST_USE = {};
 const LANG_NAMES = { ru: "русском", en: "английском", de: "немецком" };
 const LANG_SHOW = { ru: "русские", en: "английские", de: "немецкие" };
 // те же правила, что на сервере (ltts/text.py): кириллица -> ru; латиница -> de по умлаутам и служебным словам, иначе en
@@ -401,7 +323,7 @@ const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
 document.querySelector(".hint kbd").textContent = isMac ? "⌘" : "Ctrl";
 
 const state = {
-  voices: [], defaults: {}, engines: {}, clones: {},
+  voices: [], defaults: {}, engines: {},
   lang: store.get("lang", "ru"), gender: store.get("gender", "all"), format: store.get("format", "wav"),
 };
 
@@ -436,10 +358,8 @@ bindSeg("formatSeg", "format");
 
 // ---------- данные ----------
 async function load() {
-  const [v, s, c] = await Promise.all(["/api/voices", "/api/status", "/api/clones"].map((u) => fetch(u).then((r) => r.json())));
-  Object.assign(state, { voices: v.voices, defaults: v.defaults, engines: s.engines,
-    clones: Object.fromEntries(c.clones.map((x) => [x.slug, x])) });
-  $("cloneOpen").hidden = !("clone" in state.engines);
+  const [v, s] = await Promise.all(["/api/voices", "/api/status"].map((u) => fetch(u).then((r) => r.json())));
+  Object.assign(state, { voices: v.voices, defaults: v.defaults, engines: s.engines });
   renderEngines(); renderVoices();
 }
 const engineState = (n) => {
@@ -466,21 +386,6 @@ function renderVoices() {
   const saved = store.get("voice." + lang, def);
   let html = "", total = 0;
   const pass = (v) => gender === "all" || v.gender === gender;
-  // «Мои голоса» — клоны говорят на любом языке, поэтому видны в обеих вкладках
-  if ("clone" in state.engines) {
-    const mine = state.voices.filter((v) => v.engine === "clone" && pass(v));
-    html += '<div class="group-title">Мои голоса</div>';
-    if (!mine.length) html += `<div class="clone-empty">${Object.keys(state.clones).length ? "Нет клонов с этим полом" : "Пока нет — нажмите «Клонировать голос»"}</div>`;
-    for (const v of mine) {
-      total++;
-      const tags = [v.installed ? "" : `<span class="tag dl" title="Модель скачается при первом использовании">${icon("download")}скачать</span>`,
-        v.gender ? `<span>${GENDER[v.gender]}</span>` : ""].join("");
-      const name = (state.clones[v.name]?.name || v.name).replace(/</g, "&lt;");
-      html += `<label class="voice"><input type="radio" name="voice" value="${v.id}" data-pending="${v.installed ? "" : "download"}">
-        <span class="radio" aria-hidden="true"></span><span class="name">${name}</span><span class="tags">${tags}
-        <button type="button" class="del" data-slug="${v.name}" aria-label="Удалить голос ${name}" title="Удалить">${icon("trash")}</button></span></label>`;
-    }
-  }
   for (const eng of catalogEngines()) {
     const list = state.voices.filter((v) => v.engine === eng && v.lang === lang && pass(v));
     if (!list.length) continue;
@@ -509,34 +414,10 @@ function renderVoices() {
     const row = pick.closest(".voice"), top = row.offsetTop - box.offsetTop;
     if (top < box.scrollTop || top + row.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top - box.clientHeight / 2;
   }
-  updateHq();
 }
 $("voices").addEventListener("change", (e) => {
-  if (e.target.name === "voice") { store.set("voice." + state.lang, e.target.value); updateHq(); }
+  if (e.target.name === "voice") store.set("voice." + state.lang, e.target.value);
 });
-$("voices").addEventListener("click", async (e) => {
-  const del = e.target.closest(".del");
-  if (!del) return;
-  e.preventDefault();
-  const c = state.clones[del.dataset.slug];
-  if (!confirm(`Удалить голос «${c?.name || del.dataset.slug}»? Образец будет удалён с диска.`)) return;
-  await fetch(`/api/clones/${encodeURIComponent(del.dataset.slug)}`, { method: "DELETE" });
-  load();
-});
-
-// HQ (VoxCPM2, 48 кГц) — только для клонов и только если у образца есть текст
-function updateHq() {
-  const v = selectedVoice()?.value || "";
-  const row = $("hqRow"), cb = $("hq");
-  if (!v.startsWith("clone:")) { row.hidden = true; return; }
-  const c = state.clones[v.slice(6)];
-  row.hidden = false;
-  cb.disabled = !c?.text;
-  if (cb.disabled) cb.checked = false;
-  else cb.checked = store.get("hq", false);
-  $("hqNote").textContent = cb.disabled ? "нужен текст образца — пересоздайте голос с текстом" : "VoxCPM2 — чище звук, медленнее";
-}
-$("hq").addEventListener("change", () => store.set("hq", $("hq").checked));
 
 // ---------- подсказка про язык ----------
 function detectLang(text) {
@@ -668,10 +549,6 @@ async function speak() {
   if (!text) { $("text").focus(); return; }
   if (!opt || btn.getAttribute("aria-busy") === "true") return;
   let voice = opt.value, pending = opt.dataset.pending;
-  if (voice.startsWith("clone:") && $("hq").checked && !$("hq").disabled) {
-    voice = "clonehq:" + voice.slice(6);
-    pending = state.voices.find((v) => v.id === voice)?.installed ? "" : "download";
-  }
   const eng = voice.split(":")[0];
   const firstUse = pending === "download" && FIRST_USE[eng] ? `${FIRST_USE[eng]} — только в первый раз` : "";
   busy(true, firstUse || { build: "Собираю RHVoice из исходников — обычно 1–3 минуты", download: "Скачиваю голос — первый раз может занять до минуты" }[pending] || "");
@@ -698,117 +575,6 @@ async function speak() {
     busy(false);
   }
 }
-
-// ---------- клонирование голоса ----------
-const SCRIPTS = {
-  en: "Hi there! I'm recording a short sample of my voice. The quick brown fox jumps over the lazy dog, and then it runs back home before the rain begins.",
-  ru: "Привет! Я записываю короткий образец своего голоса. Съешь же ещё этих мягких французских булок, да выпей чаю, а потом прогуляйся по парку.",
-  de: "Hallo! Ich nehme gerade eine kurze Probe meiner Stimme auf. Der schnelle braune Fuchs springt über den faulen Hund, und danach trinke ich gemütlich einen Kaffee.",
-};
-const MAX_REC = 20;
-const clone = { src: "rec", gender: "", blob: null, rec: null };
-
-function wavBlob(chunks, rate) {
-  const n = chunks.reduce((a, c) => a + c.length, 0), buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
-  const str = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
-  str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt "); v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true);
-  v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 2, true);
-  let o = 44;
-  for (const c of chunks) for (let i = 0; i < c.length; i++, o += 2) { const x = Math.max(-1, Math.min(1, c[i])); v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7fff, true); }
-  return new Blob([buf], { type: "audio/wav" });
-}
-
-function setRecButton(on) {
-  $("recBtn").setAttribute("aria-pressed", String(on));
-  $("recBtn").innerHTML = on ? `${icon("stop")}Остановить` : `${icon("mic")}${clone.blob ? "Перезаписать" : "Начать запись"}`;
-}
-
-async function startRec() {
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-  } catch (e) { return cloneError("Нет доступа к микрофону: " + e.message); }
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1), chunks = [];
-  const t0 = performance.now();
-  proc.onaudioprocess = (e) => {
-    const d = e.inputBuffer.getChannelData(0);
-    chunks.push(new Float32Array(d));
-    let sum = 0; for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
-    $("meter").style.width = Math.min(100, Math.sqrt(sum / d.length) * 400) + "%";
-    const sec = (performance.now() - t0) / 1000;
-    $("recTime").textContent = fmtTime(sec);
-    if (sec >= MAX_REC) stopRec();
-  };
-  src.connect(proc); proc.connect(ctx.destination);
-  clone.rec = { stream, ctx, src, proc, chunks };
-  $("recPreview").hidden = true; $("cloneErr").hidden = true;
-  setRecButton(true);
-}
-
-function stopRec() {
-  const r = clone.rec;
-  if (!r) return;
-  clone.rec = null;
-  r.proc.disconnect(); r.src.disconnect(); r.stream.getTracks().forEach((t) => t.stop());
-  clone.blob = wavBlob(r.chunks, r.ctx.sampleRate);
-  r.ctx.close();
-  $("meter").style.width = "0";
-  $("recPreview").src = URL.createObjectURL(clone.blob); $("recPreview").hidden = false;
-  if (!$("cloneText").value.trim()) $("cloneText").value = $("script").textContent;
-  setRecButton(false);
-}
-
-function cloneError(msg) { $("cloneErr").innerHTML = `${icon("alert")}<span></span>`; $("cloneErr").querySelector("span").textContent = msg; $("cloneErr").hidden = false; }
-
-function syncCloneSrc() {
-  $("srcSeg").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === clone.src)));
-  $("recPane").hidden = clone.src !== "rec"; $("filePane").hidden = clone.src !== "file";
-}
-function syncCloneGender() { $("cloneGender").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === clone.gender))); }
-
-function openClone() {
-  Object.assign(clone, { src: "rec", gender: state.gender === "all" ? "" : state.gender, blob: null });
-  $("script").textContent = SCRIPTS[state.lang];
-  ["cloneName", "cloneText"].forEach((id) => ($(id).value = ""));
-  $("cloneFile").value = ""; $("consent").checked = false; $("cloneErr").hidden = true; $("recPreview").hidden = true;
-  $("recTime").textContent = "0:00";
-  syncCloneSrc(); syncCloneGender(); setRecButton(false);
-  $("cloneDlg").showModal();
-  $("cloneName").focus();
-}
-function closeClone() { stopRec(); $("cloneDlg").close(); }
-
-async function saveClone() {
-  const name = $("cloneName").value.trim();
-  const blob = clone.src === "rec" ? clone.blob : $("cloneFile").files[0];
-  if (!blob) return cloneError(clone.src === "rec" ? "Сначала запишите образец" : "Выберите файл с образцом");
-  if (!name) { $("cloneName").focus(); return cloneError("Придумайте имя голосу"); }
-  if (!$("consent").checked) return cloneError("Подтвердите, что это ваш голос или у вас есть согласие владельца");
-  const fd = new FormData();
-  fd.append("name", name); fd.append("audio", blob, blob.name || "sample.wav");
-  fd.append("text", $("cloneText").value.trim()); fd.append("gender", clone.gender);
-  const btn = $("cloneSave");
-  btn.setAttribute("aria-busy", "true"); btn.innerHTML = `${icon("loader", "spin")}<span>Сохраняю…</span>`;
-  try {
-    const r = await fetch("/api/clones", { method: "POST", body: fd });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.detail || data.error?.message || r.statusText);
-    store.set("voice." + state.lang, data.voice);
-    $("cloneDlg").close();
-    await load();
-  } catch (e) { cloneError(e.message); }
-  finally { btn.setAttribute("aria-busy", "false"); btn.innerHTML = "<span>Сохранить голос</span>"; }
-}
-
-$("cloneOpen").onclick = openClone;
-$("cloneClose").onclick = $("cloneCancel").onclick = closeClone;
-$("cloneDlg").addEventListener("cancel", stopRec);
-$("recBtn").onclick = () => (clone.rec ? stopRec() : startRec());
-$("cloneSave").onclick = saveClone;
-$("srcSeg").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { stopRec(); clone.src = b.dataset.v; syncCloneSrc(); } });
-$("cloneGender").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { clone.gender = b.dataset.v; syncCloneGender(); } });
 
 $("go").onclick = speak;
 $("text").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); speak(); } });

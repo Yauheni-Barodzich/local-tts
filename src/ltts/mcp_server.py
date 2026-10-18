@@ -13,11 +13,10 @@ from .text import LANGS
 mcp = MCPServer(
     "ltts",
     instructions=(
-        "Локальный синтез речи на русском, английском и немецком (Silero, Piper, RHVoice, Kokoro, клоны). "
+        "Локальный синтез речи на русском, английском и немецком (Silero, Piper, RHVoice). "
         "Язык определяется по тексту, голос подбирается того же движка и пола. "
         "speak сохраняет аудиофайл и возвращает путь; play=true — сразу проиграть на этом компьютере. "
-        "Голос задаётся как engine:voice (silero:xenia, kokoro:af_heart, piper:denis, rhvoice:anna); list_voices покажет все. "
-        "clone_voice клонирует голос по образцу — дальше voice=clone:<имя> (или clonehq:<имя> для 48 кГц)."
+        "Голос задаётся как engine:voice (silero:kseniya, piper:denis, rhvoice:anna); list_voices покажет все."
     ),
 )
 
@@ -54,33 +53,12 @@ def speak(
 
 @mcp.tool()
 def list_voices(engine: str | None = None, lang: str | None = None, installed_only: bool = False) -> dict:
-    """Список голосов. engine: silero|piper|rhvoice|kokoro|clone|clonehq, lang: ru|en|de. Нескачанные голоса скачаются при первом speak."""
+    """Список голосов. engine: silero|piper|rhvoice, lang: ru|en|de. Нескачанные голоса скачаются при первом speak."""
     try:
         voices = [v.to_dict() for v in all_voices(engine, lang) if v.installed or not installed_only]
     except KeyError:
         raise ToolError(f"engine должен быть одним из: {', '.join(ENGINE_NAMES)}") from None
     return {"defaults": {lg: default_voice(lg) for lg in LANGS}, "voices": voices}
-
-
-@mcp.tool()
-def clone_voice(name: str, audio_path: str, text: str = "", gender: str = "", overwrite: bool = False) -> dict:
-    """Клонировать голос по образцу речи (8–20 с, wav/mp3/flac/ogg). Потом speak(voice="clone:<имя>").
-
-    text: что сказано в образце — улучшает похожесть и нужен для HQ (voice="clonehq:<имя>", 48 кГц).
-    Клонируй только свой голос или с явного согласия владельца.
-    """
-    from pathlib import Path as _P
-
-    if "clone" not in ENGINE_NAMES:
-        raise ToolError("клонирование голоса доступно только на Mac с Apple Silicon")
-
-    from . import clones
-
-    try:
-        c = clones.add(name, _P(audio_path).expanduser().read_bytes(), text, gender, overwrite)
-    except Exception as e:
-        raise ToolError(str(e)) from e
-    return {"voice": f"clone:{c.slug}", "hq_voice": f"clonehq:{c.slug}" if c.text else None, **c.to_dict()}
 
 
 def run() -> None:

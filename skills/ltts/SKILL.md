@@ -1,6 +1,6 @@
 ---
 name: ltts
-description: Озвучить текст локально (русский, английский, немецкий, офлайн) через CLI ltts — Silero, Piper, RHVoice, Kokoro, клоны голоса. Используй, когда нужно сгенерировать аудио/голос из текста, озвучить ответ, сделать войсовер или проиграть фразу вслух.
+description: Озвучить текст локально (русский, английский, немецкий, офлайн) через CLI ltts — Silero, Piper, RHVoice. Используй, когда нужно сгенерировать аудио/голос из текста, озвучить ответ, сделать войсовер или проиграть фразу вслух.
 ---
 
 # ltts — локальный синтез речи
@@ -10,13 +10,13 @@ description: Озвучить текст локально (русский, ан�
 ## Озвучить
 
 ```bash
-ltts say "Текст" --json                    # -> {"ok":true,"path":"...wav","duration":2.1,"voice":"silero:xenia",...}
+ltts say "Текст" --json                    # -> {"ok":true,"path":"...wav","duration":2.1,"voice":"silero:kseniya",...}
 ltts say "Текст" -o /abs/path/out.mp3 --json
 cat long.txt | ltts say -v rhvoice:anna -o out.ogg --json
 ltts say "Текст" --play                    # проиграть через динамики
 ```
 
-- `-v`: `engine:voice` (`silero:xenia`, `silero:aidar`, `piper:denis`, `rhvoice:anna`), только имя или только движок.
+- `-v`: `engine:voice` (`silero:kseniya`, `silero:aidar`, `piper:denis`, `rhvoice:anna`), только имя или только движок.
 - `--lang auto|ru|en|de`: по умолчанию язык определяется сам, и под текст берётся голос нужного языка того же движка и пола (или другого движка, если в этом нет такого языка) (`requested_voice` в JSON покажет замену).
 - `-s`: скорость 0.25–4.0. `-f`: wav|mp3|ogg|opus|flac|pcm (по умолчанию из расширения `-o`, иначе wav).
 - Без `-o` файл кладётся в `<данные ltts>/out/` (`~/.local/share/ltts` на macOS/Linux, `%LOCALAPPDATA%\ltts` на Windows), путь — в `path`.
@@ -28,19 +28,9 @@ ltts say "Текст" --play                    # проиграть через 
 
 ## Выбор голоса
 
-- Русский: `silero:xenia` (жен.), `silero:aidar` (муж.). Английский: `kokoro:af_heart` (жен.), `kokoro:am_michael` (муж.), британский `kokoro:bf_emma` / `kokoro:bm_george`. Немецкий: `silero:eva_k` (жен.), `piper:thorsten` (муж.). На других платформах: `piper:lessac` / `piper:ryan`.
-- Максимальная скорость или длинные тексты: `rhvoice:anna` / `rhvoice:aleksandr`.
+- Русский: `silero:kseniya` / `silero:xenia` (жен.), `silero:aidar` (муж.). Английский: `silero:en_0`, `piper:lessac` / `piper:ryan`. Немецкий: `silero:eva_k` (жен.), `piper:thorsten` (муж.).
+- Максимальная скорость или длинные тексты: `rhvoice:anna` / `rhvoice:aleksandr` (macOS/Linux).
 - `ltts voices --installed --json` — что уже скачано; нескачанные голоса скачаются при первом вызове.
-
-## Клонирование голоса (Apple Silicon)
-
-```bash
-ltts clone add me /abs/sample.wav --text "что сказано в записи" --json   # 8–20 с чистой речи
-ltts say "Текст" -v clone:me --json        # OmniVoice: быстро, 24 кГц, любой язык
-ltts say "Текст" -v clone:me --hq --json   # VoxCPM2: 48 кГц, медленнее, нужен --text образца
-```
-
-Клонируй только с согласия владельца голоса. В MCP есть инструмент `clone_voice(name, audio_path, text)`.
 
 ## Советы
 
