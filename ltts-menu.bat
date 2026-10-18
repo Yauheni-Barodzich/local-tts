@@ -37,7 +37,6 @@ call :run serve --open
 exit /b !ERRORLEVEL!
 
 :cmd_dev
-shift
 if not defined REPO (
   echo [ltts] dev: запустите из клона репозитория с pyproject.toml
   exit /b 1
@@ -46,8 +45,15 @@ where uv >nul 2>&1 || (
   echo [ltts] нужен uv: https://docs.astral.sh/uv/
   exit /b 1
 )
+set "DEV_ARGS="
+:cmd_dev_next
+shift
+if "%~1"=="" goto cmd_dev_run
+set "DEV_ARGS=!DEV_ARGS! %~1"
+goto cmd_dev_next
+:cmd_dev_run
 pushd "%REPO%"
-uv run ltts %*
+uv run ltts!DEV_ARGS!
 set "EC=!ERRORLEVEL!"
 popd
 exit /b !EC!

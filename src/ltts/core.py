@@ -94,6 +94,8 @@ def default_voice(lang: str = "ru") -> str:
             return vid
     installed = [v.id for v in all_voices(lang=lang) if v.installed and v.lang == lang]
     if installed:
+        order = {vid: i for i, vid in enumerate(PREFERRED[lang])}
+        installed.sort(key=lambda vid: order.get(vid, len(order)))
         return installed[0]
     usable = [p for p in PREFERRED[lang] if p.split(":")[0] in ENGINES and ENGINES[p.split(":")[0]].installable()]
     return (usable or PREFERRED[lang])[0]

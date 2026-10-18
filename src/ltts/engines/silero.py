@@ -13,7 +13,7 @@ SILERO_BASE = "https://models.silero.ai/models/tts"
 # язык -> (модель, {голос: пол}); у английской модели 118 безымянных дикторов,
 # в каталоге — по три явно мужских/женских (отобраны по высоте голоса), остальные en_N тоже работают
 MODELS_BY_LANG = {
-    "ru": ("ru/v5_5_ru", {"xenia": "female", "kseniya": "female", "baya": "female", "aidar": "male", "eugene": "male"}),
+    "ru": ("ru/v5_5_ru", {"kseniya": "female", "xenia": "female", "baya": "female", "aidar": "male", "eugene": "male"}),
     "en": ("en/v3_en", {"en_0": "female", "en_14": "female", "en_99": "female",
                         "en_2": "male", "en_13": "male", "en_79": "male"}),
     "de": ("de/v3_de", {"eva_k": "female", "hokuspokus": "female", "bernd_ungerer": "male",
