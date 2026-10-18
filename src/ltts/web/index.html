@@ -63,6 +63,11 @@
   .icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--border);
     background: var(--surface); color: var(--muted); transition: color .15s, border-color .15s; }
   .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
+  .vol { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--muted); }
+  .vol .icon { width: 16px; height: 16px; flex: none; }
+  .vol input[type=range] { width: 96px; height: 20px; margin: 0; accent-color: var(--accent); }
+  .vol output { font: 12px var(--mono); color: var(--faint); min-width: 2.75em; text-align: right; border: 0; }
 
   /* ---------- раскладка ---------- */
   .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto 1fr; grid-template-areas: "editor aside" "history aside";
@@ -144,9 +149,11 @@
   .range-scale { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--faint); margin-top: -2px; }
 
   /* история */
-  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 32px 0 12px; }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 32px 0 12px; gap: 12px; }
   .section-head h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin: 0; }
-  .section-head span { font: 13px var(--mono); color: var(--faint); }
+  .hist-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .hist-actions span { font: 13px var(--mono); color: var(--faint); }
+  .ghost.danger:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
   .history { display: grid; gap: 12px; }
   .clip { padding: 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; align-items: center; }
   .play { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center;
@@ -169,6 +176,17 @@
   .ghost .icon { width: 15px; height: 15px; }
   .empty { padding: 32px 20px; text-align: center; color: var(--faint); font-size: 14px; }
   .empty .icon { width: 28px; height: 28px; color: var(--border-strong); margin-bottom: 8px; }
+  .out-dir { font: 12px var(--mono); color: var(--faint); margin: -4px 0 12px; word-break: break-all; }
+  .out-list { padding: 0; overflow: hidden; max-height: 420px; overflow-y: auto; scrollbar-width: thin; }
+  .out-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .out-row:last-child { border-bottom: 0; }
+  .out-row .name { flex: 1 1 160px; font: 13px var(--mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .out-row .meta { font: 12px var(--mono); color: var(--faint); white-space: nowrap; }
+  .out-row .actions { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  .play-sm { width: 36px; height: 36px; border-radius: 50%; border: 0; background: var(--accent-soft); color: var(--accent-text); display: grid; place-items: center; flex: none; }
+  .play-sm:hover { background: var(--accent); color: var(--on-accent); }
+  .play-sm .icon { width: 16px; height: 16px; }
+  .play-sm svg.icon[data-i="play"] { fill: currentColor; margin-left: 1px; }
 
   details.agents { margin-top: 32px; }
   details.agents summary { cursor: pointer; display: inline-flex; gap: 8px; align-items: center; color: var(--muted); font-size: 14px; list-style: none; }
@@ -205,6 +223,12 @@
       <div><h1>ltts</h1><p>Локальный синтез речи · ничего не уходит в интернет</p></div>
     </div>
     <div class="status" id="engines" aria-label="Состояние движков"></div>
+    <div class="vol" title="Громкость воспроизведения">
+      <svg class="icon" data-i="volume" aria-hidden="true"></svg>
+      <label for="volume" class="sr-only">Громкость</label>
+      <input id="volume" type="range" min="0" max="100" step="1" value="100" aria-valuetext="100%">
+      <output id="volumeOut" for="volume">100%</output>
+    </div>
     <button class="icon-btn" id="theme" type="button" aria-label="Тема"></button>
   </header>
 
@@ -228,8 +252,25 @@
     </main>
 
     <section class="area-history" aria-label="История">
-      <div class="section-head"><h2>История</h2><span id="histCount"></span></div>
+      <div class="section-head">
+        <h2>История</h2>
+        <div class="hist-actions">
+          <span id="histCount"></span>
+          <button class="link-btn" id="clearHistory" type="button" hidden aria-label="Очистить историю"></button>
+        </div>
+      </div>
       <div class="history" id="history"></div>
+
+      <div class="section-head">
+        <h2>На диске</h2>
+        <div class="hist-actions">
+          <span id="outCount"></span>
+          <button class="link-btn" id="refreshOut" type="button" aria-label="Обновить список файлов"></button>
+          <button class="link-btn" id="clearOut" type="button" hidden aria-label="Удалить все файлы на диске"></button>
+        </div>
+      </div>
+      <p class="out-dir" id="outDir" hidden></p>
+      <div class="out-list card" id="outList" aria-live="polite"></div>
 
       <details class="agents">
         <summary><svg class="icon" data-i="terminal"></svg>Для агентов и скриптов</summary>
@@ -295,6 +336,7 @@ const ICONS = {
   trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   build: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
 };
 const icon = (name, cls = "") => `<svg class="icon ${cls}" data-i="${name}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 function hydrateIcons(root = document) {
@@ -438,6 +480,25 @@ function updateHint() {
 }
 function updateCount() { const n = $("text").value.length; $("count").textContent = `${n} ${n % 10 === 1 && n % 100 !== 11 ? "символ" : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? "символа" : "символов"}`; }
 
+// ---------- громкость (clips + out) ----------
+let gainVolume = Math.min(1, Math.max(0, Number(store.get("volume", 1)) || 1));
+
+function applyGainAll() {
+  clips.forEach((c) => { if (c.audio) c.audio.volume = gainVolume; });
+  if (outAudio) outAudio.volume = gainVolume;
+}
+
+function setGain(v) {
+  gainVolume = Math.min(1, Math.max(0, v));
+  store.set("volume", gainVolume);
+  const pct = Math.round(gainVolume * 100);
+  const out = $("volumeOut");
+  const sl = $("volume");
+  if (out) { out.textContent = `${pct}%`; out.setAttribute("aria-valuetext", `${pct}%`); }
+  if (sl) { sl.value = String(pct); sl.setAttribute("aria-valuetext", `${pct}%`); }
+  applyGainAll();
+}
+
 // ---------- история с волной ----------
 const clips = [];
 let actx;
@@ -483,9 +544,33 @@ function setPlaying(c, on) {
   c.btn.setAttribute("aria-label", on ? "Пауза" : "Воспроизвести");
 }
 
+function disposeClip(c) {
+  c.audio?.pause();
+  if (c.url) URL.revokeObjectURL(c.url);
+  c.el = null;
+}
+
+function removeClip(c) {
+  const i = clips.indexOf(c);
+  if (i < 0) return;
+  clips.splice(i, 1);
+  disposeClip(c);
+  renderHistory();
+}
+
+function clearHistory() {
+  if (!clips.length) return;
+  if (!confirm("Удалить все записи из истории?")) return;
+  clips.splice(0, clips.length).forEach(disposeClip);
+  renderHistory();
+}
+
 function renderHistory() {
   const box = $("history");
   $("histCount").textContent = clips.length ? String(clips.length) : "";
+  const clearBtn = $("clearHistory");
+  clearBtn.hidden = !clips.length;
+  if (clips.length) clearBtn.innerHTML = `${icon("trash")}Удалить всё`;
   if (!clips.length) {
     box.innerHTML = `<div class="card empty">${icon("wave")}<div>Здесь появятся озвученные фразы.</div><div>Напишите текст и нажмите «Озвучить» или <kbd>${isMac ? "⌘" : "Ctrl"}</kbd> <kbd>Enter</kbd>.</div></div>`;
     return;
@@ -503,17 +588,19 @@ function renderHistory() {
         <div class="info"><b>${c.meta.voice}</b>${swap}<span>${c.meta.lang}</span><span class="time">0:00 / ${fmtTime(c.meta.duration)}</span><span>синтез ${c.meta.synth_seconds.toFixed(2)} с</span><span>${c.fmt}</span></div>
         <button class="ghost reuse" type="button">${icon("reuse")}В поле</button>
         <a class="ghost" href="${c.url}" download="ltts-${c.meta.voice.replace(":", "-")}.${c.fmt}">${icon("download")}Скачать</a>
+        <button class="ghost danger del" type="button">${icon("trash")}Удалить</button>
       </div>`;
     el.querySelector(".text").textContent = c.text;
     Object.assign(c, { el, btn: el.querySelector(".play"), canvas: el.querySelector("canvas"), wave: el.querySelector(".wave"), timeEl: el.querySelector(".time") });
     c.audio = new Audio(c.url);
+    c.audio.volume = gainVolume;
     setPlaying(c, false);
     let raf;
     const tick = () => { drawWave(c); c.timeEl.textContent = `${fmtTime(c.audio.currentTime)} / ${fmtTime(c.meta.duration)}`; c.wave.setAttribute("aria-valuenow", Math.round(c.audio.currentTime)); if (!c.audio.paused) raf = requestAnimationFrame(tick); };
-    c.audio.onplay = () => { clips.forEach((o) => o !== c && o.audio && !o.audio.paused && o.audio.pause()); setPlaying(c, true); tick(); };
+    c.audio.onplay = () => { pauseAllPlayback(c.audio); setPlaying(c, true); tick(); };
     c.audio.onpause = () => { setPlaying(c, false); cancelAnimationFrame(raf); tick(); };
     c.audio.onended = () => { c.audio.currentTime = 0; tick(); };
-    c.btn.onclick = () => (c.audio.paused ? c.audio.play() : c.audio.pause());
+    c.btn.onclick = () => { c.audio.volume = gainVolume; c.audio.paused ? c.audio.play() : c.audio.pause(); };
     const seekTo = (t) => { c.audio.currentTime = Math.max(0, Math.min(c.meta.duration, t)); tick(); };
     c.wave.onclick = (e) => { const r = c.wave.getBoundingClientRect(); seekTo(((e.clientX - r.left) / r.width) * c.meta.duration); };
     c.wave.onkeydown = (e) => {
@@ -522,10 +609,94 @@ function renderHistory() {
       else if (e.key === " " || e.key === "Enter") { c.btn.click(); e.preventDefault(); }
     };
     el.querySelector(".reuse").onclick = () => { $("text").value = c.text; updateCount(); updateHint(); $("text").focus(); };
+    el.querySelector(".del").onclick = () => removeClip(c);
   }
   box.replaceChildren(...clips.map((c) => c.el));
   requestAnimationFrame(redrawAll);
 }
+
+// ---------- файлы LTTS_HOME/out (ltts say без -o и т.д.) ----------
+let outFiles = [];
+let outAudio = new Audio();
+outAudio.volume = gainVolume;
+const fmtBytes = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+const fmtDate = (ts) => new Date(ts * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+const outFileUrl = (name) => `/api/out/file/${encodeURIComponent(name)}`;
+
+function pauseAllPlayback(exceptAudio = null) {
+  clips.forEach((c) => { if (c.audio && c.audio !== exceptAudio && !c.audio.paused) c.audio.pause(); });
+  if (outAudio !== exceptAudio && !outAudio.paused) outAudio.pause();
+}
+
+async function clearOutAll() {
+  if (!outFiles.length) return;
+  if (!confirm(`Удалить все файлы (${outFiles.length}) из каталога out на диске?`)) return;
+  const r = await fetch("/api/out", { method: "DELETE" });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  outAudio.pause();
+  outAudio.removeAttribute("src");
+  await loadOutFiles();
+}
+
+function renderOutList() {
+  const box = $("outList");
+  $("outCount").textContent = outFiles.length ? String(outFiles.length) : "";
+  $("refreshOut").innerHTML = `${icon("reuse")}Обновить`;
+  const clearOutBtn = $("clearOut");
+  clearOutBtn.hidden = !outFiles.length;
+  if (outFiles.length) clearOutBtn.innerHTML = `${icon("trash")}Удалить всё`;
+  if (!outFiles.length) {
+    box.innerHTML = `<div class="empty">${icon("download")}<div>Нет файлов в каталоге out.</div><div>Появятся после <code>ltts say</code> без <code>-o</code> или из MCP.</div></div>`;
+    return;
+  }
+  box.innerHTML = outFiles.map((f) => `
+    <div class="out-row" data-name="${f.name.replace(/"/g, "&quot;")}">
+      <button class="play-sm" type="button" aria-label="Воспроизвести ${f.name}">${icon("play")}</button>
+      <span class="name" title="${f.name.replace(/"/g, "&quot;")}">${f.name}</span>
+      <span class="meta">${fmtBytes(f.size)} · ${fmtDate(f.mtime)}</span>
+      <div class="actions">
+        <a class="ghost" href="${outFileUrl(f.name)}" download="${f.name}">${icon("download")}Скачать</a>
+        <button class="ghost danger out-del" type="button">${icon("trash")}Удалить</button>
+      </div>
+    </div>`).join("");
+  hydrateIcons(box);
+  box.querySelectorAll(".out-row").forEach((row) => {
+    const name = row.dataset.name;
+    row.querySelector(".play-sm").onclick = () => {
+      pauseAllPlayback(outAudio);
+      if (outAudio.src.endsWith(encodeURIComponent(name)) && !outAudio.paused) { outAudio.pause(); return; }
+      outAudio.volume = gainVolume;
+      outAudio.src = outFileUrl(name);
+      outAudio.play().catch(() => {});
+    };
+    row.querySelector(".out-del").onclick = () => deleteOutFile(name).catch((e) => {
+      $("err").innerHTML = `${icon("alert")}<span></span>`;
+      $("err").querySelector("span").textContent = e.message;
+      $("err").hidden = false;
+    });
+  });
+}
+
+async function loadOutFiles() {
+  const r = await fetch("/api/out");
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  const data = await r.json();
+  outFiles = data.files || [];
+  const dirEl = $("outDir");
+  dirEl.textContent = data.dir ? `${data.dir}${data.keep ? ` · хранится до ${data.keep} файлов` : ""}` : "";
+  dirEl.hidden = !data.dir;
+  renderOutList();
+}
+
+async function deleteOutFile(name) {
+  if (!confirm(`Удалить файл ${name}?`)) return;
+  const r = await fetch(outFileUrl(name), { method: "DELETE" });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  if (outAudio.src.includes(encodeURIComponent(name))) { outAudio.pause(); outAudio.removeAttribute("src"); }
+  await loadOutFiles();
+}
+
+outAudio.addEventListener("play", () => pauseAllPlayback(outAudio));
 
 // ---------- синтез ----------
 let timer;
@@ -561,8 +732,9 @@ async function speak() {
     const blob = await r.blob();
     const c = { text, meta, fmt: body.format, url: URL.createObjectURL(blob) };
     clips.unshift(c);
-    if (clips.length > 30) { const old = clips.pop(); old.audio?.pause(); URL.revokeObjectURL(old.url); }
+    if (clips.length > 30) disposeClip(clips.pop());
     renderHistory();
+    c.audio.volume = gainVolume;
     c.audio.play().catch(() => {});
     c.peaks = await peaksFor(blob);
     drawWave(c);
@@ -581,8 +753,14 @@ $("text").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaK
 $("text").addEventListener("input", () => { updateCount(); updateHint(); });
 $("speed").addEventListener("input", () => { $("speedv").textContent = (+$("speed").value).toFixed(2) + "×"; store.set("speed", +$("speed").value); });
 $("speed").value = store.get("speed", 1); $("speedv").textContent = (+$("speed").value).toFixed(2) + "×";
+const showErr = (e) => { $("err").innerHTML = `${icon("alert")}<span></span>`; $("err").querySelector("span").textContent = e.message; $("err").hidden = false; };
+$("clearHistory").onclick = clearHistory;
+$("refreshOut").onclick = () => loadOutFiles().catch(showErr);
+$("clearOut").onclick = () => clearOutAll().catch(showErr);
+setGain(gainVolume);
+$("volume").addEventListener("input", (e) => setGain(+e.target.value / 100));
 updateCount(); updateHint(); renderHistory();
-load().catch((e) => { $("err").innerHTML = `${icon("alert")}<span>Сервер недоступен: ${e.message}</span>`; $("err").hidden = false; });
+Promise.all([load(), loadOutFiles()]).catch((e) => { $("err").innerHTML = `${icon("alert")}<span>Сервер недоступен: ${e.message}</span>`; $("err").hidden = false; });
 </script>
 </body>
 </html>

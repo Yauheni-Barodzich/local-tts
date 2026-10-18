@@ -2,15 +2,18 @@
 
 import json
 from importlib.resources import files
-from fastapi import FastAPI, Request
+from pathlib import Path
+
+from fastapi import FastAPI, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
 from . import __version__
 from .audio import ALL_FORMATS, MIME
-from .core import ENGINES, all_voices, default_voice, doctor, download, engine_voice, render
+from .core import ENGINES, OUT_KEEP, all_voices, default_voice, doctor, download, engine_voice, render
 from .engines.base import EngineError, ModelError
+from .paths import OUT
 from .text import LANGS, detect_lang
 
 app = FastAPI(title="ltts", version=__version__)
@@ -127,6 +130,68 @@ def api_download(body: dict):
         return download(body["voice"], bool(body.get("force"))).to_dict()
     except EngineError as e:
         raise _api_error_from(e) from e
+
+
+def _out_root() -> Path:
+    OUT.mkdir(parents=True, exist_ok=True)
+    return OUT.resolve()
+
+
+def _resolve_out_file(name: str) -> Path:
+    if not name or name != Path(name).name or name in {".", ".."}:
+        raise ApiError(400, "недопустимое имя файла")
+    root = _out_root()
+    path = (OUT / name).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as e:
+        raise ApiError(400, "недопустимое имя файла") from e
+    if not path.is_file():
+        raise ApiError(404, "файл не найден")
+    return path
+
+
+@app.get("/api/out")
+def list_out(limit: int = Query(200, ge=1, le=500)):
+    """Файлы из LTTS_HOME/out (ltts say без -o, MCP и т.д.). Веб-синтез сюда не пишет."""
+    OUT.mkdir(parents=True, exist_ok=True)
+    entries = sorted((p for p in OUT.iterdir() if p.is_file()), key=lambda p: p.stat().st_mtime, reverse=True)
+    files = []
+    for p in entries[:limit]:
+        st = p.stat()
+        files.append({"name": p.name, "size": st.st_size, "mtime": st.st_mtime})
+    return {"dir": str(OUT.resolve()), "keep": OUT_KEEP, "files": files}
+
+
+@app.get("/api/out/file/{name}")
+def get_out_file(name: str):
+    path = _resolve_out_file(name)
+    ext = path.suffix.lstrip(".").lower()
+    return FileResponse(path, media_type=MIME.get(ext, "application/octet-stream"), filename=path.name)
+
+
+@app.delete("/api/out/file/{name}")
+def delete_out_file(name: str):
+    path = _resolve_out_file(name)
+    path.unlink()
+    return {"ok": True, "name": name}
+
+
+@app.delete("/api/out")
+def delete_all_out():
+    """Удалить все файлы в LTTS_HOME/out (не подкаталоги)."""
+    root = _out_root()
+    deleted = 0
+    for p in OUT.iterdir():
+        if not p.is_file():
+            continue
+        try:
+            p.resolve().relative_to(root)
+        except ValueError:
+            continue
+        p.unlink()
+        deleted += 1
+    return {"ok": True, "deleted": deleted}
 
 
 # ---------- OpenAI-совместимое API ----------
