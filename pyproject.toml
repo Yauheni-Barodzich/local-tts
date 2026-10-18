@@ -17,6 +17,9 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+[project.optional-dependencies]
+tray = ["pystray>=0.19", "Pillow>=10.0"]
+
 [project.scripts]
 ltts = "ltts.cli:main"
 
@@ -29,6 +32,14 @@ allow-direct-references = true  # en-core-web-sm нет на PyPI, только 
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ltts"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/ltts/assets/logo.svg" = "ltts/assets/logo.svg"
+"src/ltts/assets/tray.ico" = "ltts/assets/tray.ico"
+"src/ltts/assets/tray.png" = "ltts/assets/tray.png"
+"src/ltts/web/favicon.svg" = "ltts/web/favicon.svg"
+"src/ltts/web/favicon.ico" = "ltts/web/favicon.ico"
+"src/ltts/web/favicon.png" = "ltts/web/favicon.png"
 
 # на Linux берём CPU-сборку torch, иначе приедет CUDA на гигабайты
 [tool.uv.sources]

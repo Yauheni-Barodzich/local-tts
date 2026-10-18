@@ -10,5 +10,6 @@ if not exist "%ROOT%\ltts.cmd" (
   exit /b 1
 )
 
+call "%ROOT%\ltts-tray.bat" nopause
 call "%ROOT%\ltts.cmd" serve --open
 exit /b %ERRORLEVEL%

@@ -101,6 +101,24 @@ def index():
     return (files("ltts") / "web" / "index.html").read_text(encoding="utf-8")
 
 
+@app.get("/favicon.ico")
+def favicon_ico():
+    path = files("ltts") / "web" / "favicon.ico"
+    return FileResponse(path, media_type="image/x-icon")
+
+
+@app.get("/favicon.svg")
+def favicon_svg():
+    path = files("ltts") / "web" / "favicon.svg"
+    return FileResponse(path, media_type="image/svg+xml")
+
+
+@app.get("/favicon.png")
+def favicon_png():
+    path = files("ltts") / "web" / "favicon.png"
+    return FileResponse(path, media_type="image/png")
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "app": "ltts", "version": __version__}

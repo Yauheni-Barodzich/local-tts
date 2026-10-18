@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" role="img" aria-label="ltts">
+  <rect width="36" height="36" rx="10" fill="#0F172A"/>
+  <g fill="none" stroke="#F8FAFC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" transform="translate(9 9) scale(0.75)">
+    <path d="M2 10v3"/>
+    <path d="M6 6v11"/>
+    <path d="M10 3v18"/>
+    <path d="M14 8v7"/>
+    <path d="M18 5v13"/>
+    <path d="M22 10v3"/>
+  </g>
+  <circle cx="30" cy="6" r="5" fill="#DC2626" stroke="#F8FAFC" stroke-width="2"/>
+</svg>
