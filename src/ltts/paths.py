@@ -14,6 +14,7 @@ HOME = Path(os.environ.get("LTTS_HOME") or _default_home()).expanduser()
 MODELS = HOME / "models"
 OUT = HOME / "out"
 CONFIG = HOME / "config.json"
+PRONUNCIATION = HOME / "pronunciation"
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = int(os.environ.get("LTTS_PORT", "8765"))

@@ -273,4 +273,13 @@ def doctor(on_step=None) -> dict:
             "installed_voices": [v.id for v in e.voices() if v.installed],
         }
     defaults = {lang: default_voice(lang) for lang in LANGS}
-    return {"version": __version__, "home": str(HOME), "default_voice": defaults["ru"], "default_voices": defaults, "engines": engines}
+    from .pronunciation import get_lexicon
+
+    return {
+        "version": __version__,
+        "home": str(HOME),
+        "default_voice": defaults["ru"],
+        "default_voices": defaults,
+        "engines": engines,
+        "pronunciation": get_lexicon().stats,
+    }

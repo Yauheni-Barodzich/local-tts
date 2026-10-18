@@ -202,7 +202,34 @@ def cmd_doctor(args) -> int:
             v = info["verify"]
             bad = ", ".join(v["corrupt"]) or "нет"
             print(f"проверка sha256: {v['checked']} файлов, битых: {bad}" + (" (удалены, скачаются заново)" if v["corrupt"] else ""))
+        p = info.get("pronunciation") or {}
+        if p.get("enabled"):
+            print(
+                f"произношение: {p.get('words', 0)} слов, {p.get('phrases', 0)} фраз, "
+                f"{p.get('english', 0)} en — {p.get('dir')}"
+            )
+        else:
+            print("произношение: выключено (LTTS_PRONUNCIATION=0 или pronunciation.enabled=false)")
     return 0 if any(e["ok"] and e["installed_voices"] for e in info["engines"].values()) else 1
+
+
+def cmd_lexicon(args) -> int:
+    from .pronunciation import get_lexicon, invalidate_cache, load_lexicon
+
+    if args.reload:
+        invalidate_cache()
+    lex = load_lexicon(force=True)
+    stats = lex.stats
+    if args.json:
+        print(json.dumps({"ok": True, **stats, "files": lex.files}, ensure_ascii=False, indent=2))
+        return 0
+    print(f"каталог: {stats['dir']}")
+    print(f"записей: {stats['words']} слов, {stats['phrases']} фраз, {stats['english']} english")
+    print(f"файлов: {stats['files']}")
+    if args.verbose and lex.files:
+        for f in lex.files:
+            print(f"  {f}")
+    return 0
 
 
 def cmd_serve(args) -> int:
@@ -328,6 +355,12 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("voice", nargs="?")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_default)
+
+    s = sub.add_parser("lexicon", help="словарь произношения (каталог pronunciation/)")
+    s.add_argument("--reload", action="store_true", help="перечитать файлы с диска")
+    s.add_argument("-v", "--verbose", action="store_true", help="список загруженных файлов")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_lexicon)
 
     s = sub.add_parser("doctor", help="что установлено и что сломано")
     s.add_argument("--verify", action="store_true", help="сверить sha256 всех моделей, битые удалить")

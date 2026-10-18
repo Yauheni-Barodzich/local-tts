@@ -82,6 +82,8 @@ sample_rate, synth_seconds, via, [fallback]`. Ошибка: код выхода 
 
 **`out/`** (файлы без `-o`) хранит последние 200 файлов (`LTTS_OUT_KEEP`, `0` — без ротации).
 
+**Произношение (Silero ru):** словарь в каталоге `pronunciation/` (JSON/JSONL, см. [pronunciation/README.md](pronunciation/README.md)). `ltts lexicon`, счётчики в `ltts doctor`.
+
 ## Голоса
 
 | Движок | Русский | English | Deutsch | Скорость | Особенности |

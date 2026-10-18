@@ -108,9 +108,9 @@ class Silero(Engine):
         # silero молча глотает цифры, а русская модель — ещё и латиницу
         text = numbers_to_words(text, lang)
         if lang == "ru":
-            from ..english import english_to_cyrillic
+            from ..pronunciation import prepare_silero_ru
 
-            text = english_to_cyrillic(text, stress=True)
+            text = prepare_silero_ru(text)
         rate = f"{round(speed * 100)}%"
         parts = []
         with self.lock:

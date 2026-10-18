@@ -1,0 +1,10 @@
+{
+  "_comment": "Скопируйте в %LOCALAPPDATA%\\ltts\\pronunciation или добавьте paths в config.json",
+  "words": {
+    "лtts": "эл-те-те-эс"
+  },
+  "phrases": {},
+  "english": {
+    "nginx": "эндж+ин-икс"
+  }
+}
