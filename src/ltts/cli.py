@@ -313,7 +313,7 @@ def cmd_setup(args) -> int:
             print(f"✓ {vid}", file=sys.stderr)
         except Exception as e:
             print(f"✗ {vid}: {e}", file=sys.stderr)
-    return cmd_doctor(argparse.Namespace(json=False))
+    return cmd_doctor(argparse.Namespace(json=False, verify=False))
 
 
 # ---------- парсер ----------

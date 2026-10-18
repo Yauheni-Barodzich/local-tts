@@ -10,6 +10,12 @@ set "LTTS_DATA=%LOCALAPPDATA%\ltts"
 if exist "%ROOT%\pyproject.toml" set "REPO=%ROOT%"
 
 call :refresh_path
+if /i "%~1"=="install" goto do_install
+if /i "%~1"=="update" goto do_install
+if /i "%~1"=="help" goto help
+if /i "%~1"=="/?" goto help
+if /i "%~1"=="-h" goto help
+
 call :resolve_ltts
 if not defined LTTS (
   echo [ltts] Не найден ltts.exe и нет uv для запуска из репозитория.
@@ -18,12 +24,7 @@ if not defined LTTS (
 )
 
 if "%~1"=="" goto menu
-if /i "%~1"=="help" goto help
-if /i "%~1"=="/?" goto help
-if /i "%~1"=="-h" goto help
 if /i "%~1"=="menu" goto menu
-if /i "%~1"=="install" goto do_install
-if /i "%~1"=="update" goto do_install
 if /i "%~1"=="open" goto cmd_open
 if /i "%~1"=="dev" goto cmd_dev
 

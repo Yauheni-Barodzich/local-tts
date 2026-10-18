@@ -10,6 +10,25 @@ $Python = if ($env:LTTS_PYTHON) { $env:LTTS_PYTHON } else { "3.12" }
 function Say($msg)  { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Warn($msg) { Write-Host "!! $msg" -ForegroundColor Yellow }
 
+function Add-UserPathIfMissing([string[]]$Dirs) {
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    $parts = @($userPath -split ";" | Where-Object { $_ })
+    $added = @()
+    foreach ($dir in $Dirs) {
+        if (-not $dir) { continue }
+        $norm = $dir.TrimEnd('\')
+        if ($parts -notcontains $norm) {
+            $parts = @($norm) + $parts
+            $added += $norm
+        }
+    }
+    if (-not $added) { return }
+    [Environment]::SetEnvironmentVariable("Path", ($parts -join ";"), "User")
+    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $env:Path = ($parts -join ";") + ";" + $machine
+    Say "добавил в PATH пользователя: $($added -join '; ')"
+}
+
 function Stop-BlockingLtts {
     # uv tool install не может перезаписать Scripts, пока жив ltts serve / python из этого venv
     $toolRoot = Join-Path $env:APPDATA "uv\tools\ltts"
@@ -61,6 +80,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
     $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 }
+Add-UserPathIfMissing @("$env:USERPROFILE\.local\bin")
 
 # 2. ltts: из локального клона, если скрипт запущен из него, иначе из GitHub
 $Src = "ltts @ $Repo/archive/refs/heads/master.zip"  # zip, а не git+ — git на Windows часто нет
@@ -71,10 +91,8 @@ Say "ставлю ltts из $Src (Python $Python, torch — пара сотен 
 Install-LttsTool $Src $Python
 
 $Bin = (uv tool dir --bin).Trim()
-if (-not ($env:Path -split ";" | Where-Object { $_ -eq $Bin })) {
-    uv tool update-shell | Out-Null
-    $env:Path = "$Bin;$env:Path"
-}
+Add-UserPathIfMissing @($Bin)
+uv tool update-shell | Out-Null
 
 # 3. голоса по умолчанию (RHVoice на Windows пропускается сам)
 Say "качаю голоса"

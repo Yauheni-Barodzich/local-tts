@@ -35,7 +35,7 @@ ENGINES: dict[str, Engine] = _build_engines()
 ENGINE_NAMES: list[str] = list(ENGINES)
 # порядок предпочтения по языкам: дефолтный голос, выбор голоса движка, замена голоса под язык текста
 PREFERRED = {
-    "ru": ["silero:xenia", "piper:irina", "rhvoice:anna", "silero:aidar", "piper:denis", "rhvoice:aleksandr"],
+    "ru": ["silero:kseniya", "silero:xenia", "piper:irina", "rhvoice:anna", "silero:aidar", "piper:denis", "rhvoice:aleksandr"],
     "en": ["kokoro:af_heart", "silero:en_0", "piper:lessac", "rhvoice:slt",
            "kokoro:am_michael", "silero:en_2", "piper:ryan", "rhvoice:bdl"],
     # по замеру Whisper: silero:eva_k 3.8% WER, thorsten — самый естественный мужской; kerstin/ramona (low) — хуже
@@ -43,7 +43,7 @@ PREFERRED = {
            "silero:bernd_ungerer", "piper:kerstin"],
 }  # fmt: skip
 DEFAULT_DOWNLOADS = [
-    "silero:xenia", "piper:irina", "piper:denis", "rhvoice:anna", "rhvoice:aleksandr",
+    "silero:kseniya", "piper:irina", "piper:denis", "rhvoice:anna", "rhvoice:aleksandr",
     "kokoro:af_heart", "silero:en_0", "piper:lessac", "piper:ryan", "rhvoice:slt", "rhvoice:bdl",
     "silero:eva_k", "piper:thorsten",
 ]  # fmt: skip
@@ -147,7 +147,7 @@ def synthesize(
     text: str, voice: str | None = None, speed: float = 1.0, lang: str | None = None, auto_download: bool = True
 ) -> tuple[Audio, dict]:
     """lang: ru|en — язык текста; None/auto — определить по тексту и при необходимости
-    заменить голос на голос того же движка и пола для нужного языка (xenia + английский -> silero:en_0)."""
+    заменить голос на голос того же движка и пола для нужного языка (kseniya + английский -> silero:en_0)."""
     text = text.strip()
     if not text:
         raise EngineError("пустой текст")
