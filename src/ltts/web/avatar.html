@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<title>ltts avatar</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    background: transparent !important;
+    background-color: transparent !important;
+  }
+  #stage {
+    position: relative; width: 100%; height: 100%;
+    display: flex; align-items: flex-end; justify-content: center;
+    overflow: hidden;
+    visibility: hidden;
+    background: transparent;
+  }
+  #stage.live { visibility: visible; }
+  #stage img, #stage canvas { max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none; display: block; }
+  #rig { position: absolute; inset: 0; background: transparent; }
+  #rig canvas { width: 100%; height: 100%; background: transparent; }
+  #single {
+    max-height: 100%;
+    transform-origin: center bottom;
+    filter: drop-shadow(0 2px 8px rgba(0,0,0,.2));
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <img id="single" alt="" hidden>
+  <div id="rig" hidden><canvas id="cv"></canvas></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const stage = $("stage");
+let cfg = { mode: "bundled" };
+let manifest = null;
+let mouthImgs = {};
+let baseImg = null;
+let blink = false;
+let blinkT = 0;
+let poll = null;
+let playing = false;
+let configLoaded = false;
+
+async function loadConfig() {
+  cfg = await fetch("/api/avatar/config").then((r) => r.json());
+  if (cfg.mode === "rig" && cfg.rig_url) {
+    manifest = await fetch(cfg.rig_url).then((r) => r.json());
+    baseImg = await loadImg(manifest.base);
+    mouthImgs = {};
+    for (const [k, url] of Object.entries(manifest.mouths || {})) {
+      mouthImgs[k] = await loadImg(url);
+    }
+    $("single").hidden = true;
+    $("rig").hidden = false;
+  } else {
+    const url = (cfg.image_url || cfg.bundled_url) + "?t=" + Date.now();
+    $("single").src = url;
+    $("single").hidden = false;
+    $("rig").hidden = true;
+  }
+  configLoaded = true;
+}
+
+function loadImg(url) {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.crossOrigin = "anonymous";
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = url;
+  });
+}
+
+function drawRig(st) {
+  const cv = $("cv");
+  const wrap = $("rig");
+  const w = wrap.clientWidth || 160;
+  const h = wrap.clientHeight || 184;
+  cv.width = w;
+  cv.height = h;
+  const g = cv.getContext("2d", { alpha: true });
+  g.clearRect(0, 0, w, h);
+  if (!baseImg) return;
+  const scale = Math.min(w / baseImg.width, h / baseImg.height);
+  const bw = baseImg.width * scale;
+  const bh = baseImg.height * scale;
+  const ox = (w - bw) / 2;
+  const oy = h - bh;
+  g.drawImage(baseImg, ox, oy, bw, bh);
+  if (!st.playing) return;
+  const mouth = manifest?.mouth || { x: 0.35, y: 0.55, w: 0.3, h: 0.12 };
+  let vis = st.viseme || "closed";
+  if (st.level < 0.04) vis = "closed";
+  else if (st.level > 0.08 && mouthImgs[vis]) { /* server viseme */ }
+  else vis = st.level > 0.45 ? "O" : st.level > 0.2 ? "E" : "closed";
+  const m = mouthImgs[vis] || mouthImgs.closed;
+  if (m) {
+    const mx = ox + mouth.x * bw;
+    const my = oy + mouth.y * bh;
+    const mw = mouth.w * bw;
+    const mh = mouth.h * bh;
+    const open = 0.35 + st.level * 0.65;
+    g.drawImage(m, mx, my, mw, mh * open);
+  }
+  if (blink) {
+    g.fillStyle = "rgba(15,23,42,0.35)";
+    const ey = manifest?.eyes;
+    if (ey) g.fillRect(ox + ey.x * bw, oy + ey.y * bh, ey.w * bw, ey.h * bh);
+  }
+}
+
+function tickSingle(st) {
+  const el = $("single");
+  if (el.hidden || !st.playing) {
+    el.style.transform = "";
+    return;
+  }
+  const lift = 1 + Math.min(0.04, st.level * 0.04);
+  el.style.transform = `scale(${lift})`;
+}
+
+function setPollActive(on) {
+  if (on && !poll) {
+    poll = setInterval(pollPlayback, 50);
+  } else if (!on && poll) {
+    clearInterval(poll);
+    poll = null;
+  }
+}
+
+async function pollPlayback() {
+  try {
+    const st = await fetch("/api/avatar/playback").then((r) => r.json());
+    const was = playing;
+    playing = !!st.playing;
+    stage.classList.toggle("live", playing);
+    if (playing && !was && !configLoaded) await loadConfig();
+    setPollActive(playing);
+    if (!playing) return;
+    if (manifest) drawRig(st);
+    else tickSingle(st);
+    const now = performance.now();
+    if (now - blinkT > 2800 + Math.random() * 2000) {
+      blink = true;
+      blinkT = now;
+      setTimeout(() => { blink = false; }, 120);
+    }
+  } catch (_) {}
+}
+
+poll = setInterval(pollPlayback, 250);
+window.addEventListener("beforeunload", () => { if (poll) clearInterval(poll); });
+</script>
+</body>
+</html>

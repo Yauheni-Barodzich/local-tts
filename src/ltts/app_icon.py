@@ -21,3 +21,10 @@ def tray_image_path() -> Path:
         if p.is_file():
             return p
     raise FileNotFoundError("tray icon not found in ltts/assets")
+
+
+def default_avatar_image_path() -> Path:
+    p = _ASSETS / "avatar-default.png"
+    if p.is_file():
+        return p
+    return tray_image_path()

@@ -29,7 +29,9 @@ echo.
 
 set "TOOL_SRC=%ROOT%[desktop]"
 call :stop_ltts
-ping -n 3 127.0.0.1 >nul
+ping -n 4 127.0.0.1 >nul
+call :stop_ltts
+ping -n 2 127.0.0.1 >nul
 call :do_install
 if not "!EC!"=="0" (
   echo.
@@ -84,8 +86,21 @@ popd
 exit /b !EC!
 
 :stop_ltts
+set "DESKTOP_PID=%LOCALAPPDATA%\ltts\desktop.pid"
+if exist "!DESKTOP_PID!" (
+  set /p _DPID=<"!DESKTOP_PID!"
+  taskkill /F /PID !_DPID! >nul 2>&1
+  del /f /q "!DESKTOP_PID!" >nul 2>&1
+)
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$names = 'ltts','python','pythonw'; foreach ($n in $names) { Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object { try { $p = $_.Path } catch { $p = $null }; if ($n -eq 'ltts' -or ($p -and $p -like '*\uv\tools\ltts*')) { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue } } }" >nul 2>&1
+  "$tool = Join-Path $env:APPDATA 'uv\tools\ltts';" ^
+  "Get-CimInstance Win32_Process -EA 0 | Where-Object { $_.CommandLine -match 'ltts\.cli desktop|ltts desktop|ltts-desktop|uvicorn.*ltts' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -EA 0 };" ^
+  "foreach ($n in @('ltts','python','pythonw')) {" ^
+  "  Get-Process -Name $n -EA SilentlyContinue | ForEach-Object {" ^
+  "    try { $p = $_.Path } catch { $p = $null }" ^
+  "    if ($n -eq 'ltts' -or ($p -and $p -like \"*\uv\tools\ltts*\")) { Stop-Process -Id $_.Id -Force -EA SilentlyContinue }" ^
+  "  }" ^
+  "}" >nul 2>&1
 exit /b 0
 
 :fail

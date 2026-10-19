@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ltts — мастер персонажа</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  :root { --bg: #F8FAFC; --surface: #fff; --border: #E2E8F0; --text: #0F172A; --accent: #2563EB; --font: system-ui, sans-serif; }
+  body { margin: 0; font: 16px/1.5 var(--font); background: var(--bg); color: var(--text); }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { color: #64748B; margin: 0 0 16px; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font: inherit; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .stage { position: relative; max-width: 100%; margin: 16px 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #1e293b; }
+  canvas { display: block; max-width: 100%; cursor: crosshair; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0; }
+  .err { color: #B91C1C; margin-top: 8px; }
+  label { font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/settings" class="btn">← Настройки</a>
+  <h1>Мастер персонажа</h1>
+  <p>Загрузите PNG/JPEG/WebP с прозрачностью. Отметьте область рта (перетаскиванием). Опционально — глаза для моргания.</p>
+  <div class="row">
+    <input type="file" id="file" accept="image/png,image/jpeg,image/webp">
+    <label><input type="radio" name="tool" value="mouth" checked> Рот</label>
+    <label><input type="radio" name="tool" value="eyes"> Глаза</label>
+    <button class="btn primary" id="save" type="button" disabled>Сохранить риг</button>
+  </div>
+  <div class="stage"><canvas id="cv"></canvas></div>
+  <p class="err" id="err" hidden></p>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let img = null;
+let rects = { mouth: null, eyes: null };
+let drag = null;
+const cv = $("cv");
+const g = cv.getContext("2d");
+
+function normRect(x0, y0, x1, y1, w, h) {
+  const x = Math.min(x0, x1) / w, y = Math.min(y0, y1) / h;
+  const rw = Math.abs(x1 - x0) / w, rh = Math.abs(y1 - y0) / h;
+  return { x, y, w: rw, h: rh };
+}
+
+function draw() {
+  if (!img) return;
+  const maxW = cv.parentElement.clientWidth || 640;
+  const scale = Math.min(1, maxW / img.width);
+  cv.width = img.width * scale;
+  cv.height = img.height * scale;
+  g.drawImage(img, 0, 0, cv.width, cv.height);
+  g.strokeStyle = "#2563EB";
+  g.lineWidth = 2;
+  for (const [name, r] of Object.entries(rects)) {
+    if (!r) continue;
+    g.strokeStyle = name === "mouth" ? "#DC2626" : "#60A5FA";
+    g.strokeRect(r.x * cv.width, r.y * cv.height, r.w * cv.width, r.h * cv.height);
+  }
+}
+
+$("file").onchange = (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  const url = URL.createObjectURL(f);
+  const i = new Image();
+  i.onload = () => { img = i; window._file = f; draw(); $("save").disabled = false; URL.revokeObjectURL(url); };
+  i.src = url;
+};
+
+function tool() { return document.querySelector('input[name="tool"]:checked')?.value || "mouth"; }
+
+cv.onmousedown = (e) => {
+  if (!img) return;
+  const r = cv.getBoundingClientRect();
+  drag = { x: e.clientX - r.left, y: e.clientY - r.top, key: tool() };
+};
+cv.onmousemove = (e) => {
+  if (!drag || !img) return;
+  const r = cv.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  rects[drag.key] = normRect(drag.x, drag.y, x, y, cv.width, cv.height);
+  draw();
+};
+cv.onmouseup = () => { drag = null; };
+
+$("save").onclick = async () => {
+  $("err").hidden = true;
+  const f = window._file;
+  if (!f || !rects.mouth) { $("err").textContent = "Нужны файл и прямоугольник рта"; $("err").hidden = false; return; }
+  const fd = new FormData();
+  fd.append("file", f);
+  fd.append("spec", JSON.stringify({ mouth: rects.mouth, eyes: rects.eyes, face: null }));
+  const r = await fetch("/api/avatar/rig", { method: "POST", body: fd });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    $("err").textContent = j.detail || r.statusText;
+    $("err").hidden = false;
+    return;
+  }
+  alert("Риг сохранён. Перезапустите desktop или озвучьте фразу.");
+  location.href = "/settings";
+};
+</script>
+</body>
+</html>

@@ -613,14 +613,67 @@ function applyGainAll() {
   if (outAudio) outAudio.volume = gainVolume;
 }
 
-/** Сигнал desktop-трею: идёт воспроизведение в WebView (pywebview). */
-function wireTrayPlayback(audio) {
+/** Сигнал desktop: трей, аватар, viseme (pywebview). */
+function wireTrayPlayback(audio, speechMeta) {
   if (!audio || audio._lttsTrayWired) return;
   audio._lttsTrayWired = true;
   let tracked = false;
-  const notify = (d) => { try { window.pywebview?.api?.playback_delta?.(d); } catch (_) {} };
-  const start = () => { if (!tracked) { tracked = true; notify(1); } };
-  const stop = () => { if (tracked) { tracked = false; notify(-1); } };
+  let levelTimer = null;
+  let analyser = null;
+  let srcNode = null;
+  const api = () => window.pywebview?.api;
+  const notify = (d) => { try { api()?.playback_delta?.(d); } catch (_) {} };
+  const notifyLevel = (v) => { try { api()?.playback_level?.(v); } catch (_) {} };
+  const notifySpeech = (text, dur) => { try { api()?.playback_speech?.(text, dur); } catch (_) {} };
+
+  function stopLevelLoop() {
+    if (levelTimer) { clearInterval(levelTimer); levelTimer = null; }
+    notifyLevel(0);
+    try { srcNode?.disconnect(); } catch (_) {}
+    srcNode = null;
+    analyser = null;
+  }
+
+  function startLevelLoop() {
+    stopLevelLoop();
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      analyser = actx.createAnalyser();
+      analyser.fftSize = 256;
+      srcNode = actx.createMediaElementSource(audio);
+      srcNode.connect(analyser);
+      analyser.connect(actx.destination);
+      const buf = new Uint8Array(analyser.frequencyBinCount);
+      levelTimer = setInterval(() => {
+        if (audio.paused) return;
+        analyser.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+        const rms = Math.sqrt(sum / buf.length);
+        notifyLevel(Math.min(1, rms * 4));
+      }, 50);
+    } catch (_) {
+      levelTimer = setInterval(() => { if (!audio.paused) notifyLevel(0.35); }, 50);
+    }
+  }
+
+  const start = () => {
+    if (!tracked) {
+      tracked = true;
+      notify(1);
+      const meta = speechMeta || audio._lttsSpeech;
+      if (meta?.text && meta.duration) notifySpeech(meta.text, meta.duration);
+      startLevelLoop();
+    }
+  };
+  const stop = () => {
+    if (tracked) {
+      tracked = false;
+      notify(-1);
+      stopLevelLoop();
+      audio._lttsSpeech = null;
+    }
+  };
   audio.addEventListener("play", start);
   audio.addEventListener("pause", stop);
   audio.addEventListener("ended", stop);
@@ -731,7 +784,7 @@ function renderHistory() {
     el.querySelector(".text").textContent = c.text;
     Object.assign(c, { el, btn: el.querySelector(".play"), canvas: el.querySelector("canvas"), wave: el.querySelector(".wave"), timeEl: el.querySelector(".time") });
     c.audio = new Audio(c.url);
-    wireTrayPlayback(c.audio);
+    wireTrayPlayback(c.audio, { text: c.text, duration: c.meta.duration });
     c.audio.volume = gainVolume;
     setPlaying(c, false);
     let raf;

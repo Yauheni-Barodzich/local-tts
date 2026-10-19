@@ -21,6 +21,7 @@ from .mcp_http import MCP_MOUNT_PATH, mcp_http_enabled, mcp_http_url
 from .paths import DEFAULT_HOST, DEFAULT_PORT, IS_WINDOWS
 from .text import LANGS
 from .pronunciation import get_lexicon, load_lexicon
+from .avatar_config import avatar_public_config, save_avatar_config
 
 
 def _env_overrides() -> dict[str, str]:
@@ -73,6 +74,7 @@ def settings_snapshot() -> dict[str, Any]:
             "mcp_http": mcp_http_url(DEFAULT_HOST, DEFAULT_PORT) if mcp_http_enabled() else None,
             "mcp_http_path": MCP_MOUNT_PATH if mcp_http_enabled() else None,
         },
+        "avatar": avatar_public_config(),
     }
 
 
@@ -119,6 +121,10 @@ def apply_settings(patch: dict[str, Any]) -> dict[str, Any]:
         if "enabled" in pron:
             p = cfg.setdefault("pronunciation", {})
             p["enabled"] = bool(pron["enabled"])
+
+    if "avatar" in patch and isinstance(patch["avatar"], dict):
+        save_avatar_config(patch["avatar"])
+        cfg = load_config()
 
     save_config(cfg)
     if "pronunciation" in patch:

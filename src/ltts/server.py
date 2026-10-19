@@ -82,6 +82,13 @@ class SettingsPatch(BaseModel):
     sample_rate: int | None = None
     out_keep: int | None = Field(None, ge=0, le=1000)
     pronunciation: dict | None = None
+    avatar: dict | None = None
+
+
+class AvatarConfigPatch(BaseModel):
+    enabled: bool | None = None
+    size: int | None = Field(None, ge=80, le=400)
+    mode: str | None = None
 
 
 class OpenAISpeechReq(BaseModel):
@@ -164,6 +171,136 @@ def settings_page():
 @app.get("/setup", response_class=HTMLResponse)
 def setup_page():
     return _html_page("setup.html")
+
+
+@app.get("/avatar", response_class=HTMLResponse)
+def avatar_page():
+    return _html_page("avatar.html")
+
+
+@app.get("/avatar-rig", response_class=HTMLResponse)
+def avatar_rig_page():
+    return _html_page("avatar-rig.html")
+
+
+@app.get("/assets/{name}")
+def package_asset(name: str):
+    if name not in ("app.png", "tray.png", "logo.svg", "avatar-default.png"):
+        raise ApiError(404, "не найдено")
+    path = files("ltts") / "assets" / name
+    if not path.is_file():
+        raise ApiError(404, "не найдено")
+    mt = "image/png" if name.endswith(".png") else "image/svg+xml"
+    return FileResponse(path, media_type=mt)
+
+
+@app.get("/api/avatar/config")
+def api_avatar_config():
+    from .avatar_config import avatar_public_config
+
+    return avatar_public_config()
+
+
+@app.get("/api/avatar/playback")
+def api_avatar_playback():
+    from .playback_hub import get_playback_hub
+
+    hub = get_playback_hub()
+    if hub is None:
+        return {"playing": False, "level": 0.0, "viseme": "closed", "elapsed": 0, "duration": 0, "schedule": []}
+    return hub.state.snapshot()
+
+
+@app.get("/api/avatar/image")
+def api_avatar_image():
+    from .avatar_config import AVATAR_IMAGE
+    from .app_icon import default_avatar_image_path
+
+    if AVATAR_IMAGE.is_file():
+        return FileResponse(AVATAR_IMAGE, media_type="image/png")
+    return FileResponse(default_avatar_image_path(), media_type="image/png")
+
+
+@app.get("/api/avatar/rig/manifest")
+def api_avatar_rig_manifest():
+    from .avatar_rig import rig_manifest
+
+    m = rig_manifest()
+    if not m:
+        raise ApiError(404, "риг не настроен")
+    return m
+
+
+@app.get("/api/avatar/rig/{filename}")
+def api_avatar_rig_file(filename: str):
+    from .avatar_config import AVATAR_DIR
+
+    if filename not in (
+        "base.png",
+        "mouth_closed.png",
+        "mouth_A.png",
+        "mouth_E.png",
+        "mouth_I.png",
+        "mouth_O.png",
+        "mouth_U.png",
+        "mouth_MBP.png",
+    ):
+        raise ApiError(400, "недопустимый файл")
+    path = AVATAR_DIR / filename
+    if not path.is_file():
+        raise ApiError(404, "не найдено")
+    return FileResponse(path, media_type="image/png")
+
+
+@app.post("/api/avatar/upload")
+async def api_avatar_upload(request: Request):
+    from .avatar_config import AVATAR_IMAGE, MAX_UPLOAD_BYTES
+
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None:
+        raise ApiError(400, "нужно поле file")
+    data = await upload.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ApiError(400, f"файл больше {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ")
+    if not data[:8]:
+        raise ApiError(400, "пустой файл")
+    AVATAR_IMAGE.parent.mkdir(parents=True, exist_ok=True)
+    AVATAR_IMAGE.write_bytes(data)
+    from .avatar_config import save_avatar_config
+
+    save_avatar_config({"mode": "image"})
+    return {"ok": True, "path": str(AVATAR_IMAGE)}
+
+
+@app.post("/api/avatar/rig")
+async def api_avatar_rig_save(request: Request):
+    import json
+
+    from .avatar_config import AVATAR_DIR, MAX_UPLOAD_BYTES, save_avatar_config
+    from .avatar_rig import build_rig_from_upload
+
+    form = await request.form()
+    upload = form.get("file")
+    spec_raw = form.get("spec")
+    if upload is None or spec_raw is None:
+        raise ApiError(400, "нужны file и spec (JSON)")
+    data = await upload.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ApiError(400, "файл слишком большой")
+    try:
+        spec = json.loads(spec_raw if isinstance(spec_raw, str) else spec_raw.decode())
+    except (json.JSONDecodeError, AttributeError) as e:
+        raise ApiError(400, "spec: невалидный JSON") from e
+    tmp = AVATAR_DIR / "_upload_source.png"
+    AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+    tmp.write_bytes(data)
+    try:
+        meta = build_rig_from_upload(tmp, spec)
+    finally:
+        tmp.unlink(missing_ok=True)
+    save_avatar_config({"mode": "rig"})
+    return {"ok": True, "rig": meta}
 
 
 @app.get("/api/settings")

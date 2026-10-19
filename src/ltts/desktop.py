@@ -122,18 +122,21 @@ def run_desktop(
         return 1
 
     from .tray import _load_icon_image
-    from .tray_playback import DesktopJsApi, TrayPlaybackAnimator
+    from .playback_hub import DesktopJsApi, PlaybackHub, set_playback_hub
+    from .avatar_config import avatar_config
 
     from .web_assets import web_ui_query
 
     base = f"http://{host}:{port}"
     bust = web_ui_query()
     url = f"{base}/?{bust}"
-    tray_animator = TrayPlaybackAnimator()
-    js_api = DesktopJsApi(tray_animator)
+    playback_hub = PlaybackHub()
+    set_playback_hub(playback_hub)
+    js_api = DesktopJsApi(playback_hub)
     server_handle: ServerHandle | None = None
     owned_server = False
     window = None
+    avatar_window = None
     icon_ref: list[pystray.Icon] = []
     shutting_down = threading.Event()
 
@@ -179,8 +182,14 @@ def run_desktop(
 
     def quit_app(_icon=None, _item=None) -> None:
         shutting_down.set()
-        tray_animator.shutdown()
+        playback_hub.shutdown()
+        set_playback_hub(None)
         stop_owned_server()
+        if avatar_window is not None:
+            try:
+                avatar_window.destroy()
+            except Exception:
+                pass
         if window is not None:
             try:
                 window.destroy()
@@ -218,7 +227,7 @@ def run_desktop(
             tray_icon = pystray.Icon("ltts", image, "ltts — локальный TTS", menu)
 
             def _tray_setup(icon) -> None:
-                tray_animator.attach(icon)
+                playback_hub.attach_tray(icon)
 
             icon_ref.append(tray_icon)
             tray_icon.run(setup=_tray_setup)
@@ -261,6 +270,31 @@ def run_desktop(
             js_api=js_api,
         )
         window.events.closing += on_closing
+
+        av = avatar_config()
+        if av["enabled"]:
+            av_size = int(av["size"])
+            av_h = int(av_size * 1.15)
+            avatar_window = webview.create_window(
+                "ltts-avatar",
+                html="<!DOCTYPE html><html><body style='margin:0;background:transparent'></body></html>",
+                width=av_size,
+                height=av_h,
+                x=-24000,
+                y=-24000,
+                frameless=True,
+                transparent=True,
+                background_color="#FFFFFF",
+                on_top=True,
+                hidden=True,
+                easy_drag=True,
+                focus=False,
+                resizable=False,
+                shadow=False,
+            )
+            playback_hub.avatar.set_page_url(f"{base}/avatar?{bust}")
+            playback_hub.avatar.attach(avatar_window)
+
         # pywebview — только главный поток
         webview.start(gui="edgechromium", icon=icon_path)
     except Exception as e:
@@ -272,7 +306,8 @@ def run_desktop(
         clear_pid(DESKTOP_PID)
         stop_owned_server()
         shutting_down.set()
-        tray_animator.shutdown()
+        playback_hub.shutdown()
+        set_playback_hub(None)
         if icon_ref:
             try:
                 icon_ref[0].stop()

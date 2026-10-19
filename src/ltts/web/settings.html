@@ -122,6 +122,22 @@
     <table><thead><tr><th>Голос</th><th>Язык</th><th>Статус</th><th></th></tr></thead><tbody id="voices-tbody"></tbody></table>
   </section>
 
+  <section class="card" id="sec-avatar">
+    <h2>Персонаж у трея</h2>
+    <p class="label">Показывается в desktop при воспроизведении (прозрачное окно у панели задач).</p>
+    <label class="switch"><input type="checkbox" id="avatar-enabled"> Включить персонажа</label>
+    <div class="field" style="margin-top:12px">
+      <div class="label">Размер окна (px)</div>
+      <input id="avatar-size" type="number" min="80" max="400" step="10" value="160">
+    </div>
+    <div class="row" style="margin-top:12px">
+      <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp">
+      <button class="btn" id="avatar-upload" type="button">Загрузить PNG</button>
+      <a class="btn" href="/avatar-rig">Мастер рига</a>
+    </div>
+    <p class="mono" id="avatar-status"></p>
+  </section>
+
   <section class="card">
     <h2>Произношение (Silero ru)</h2>
     <label class="switch"><input type="checkbox" id="pron-enabled"> Включить словарь</label>
@@ -227,6 +243,13 @@ async function loadAll() {
   const stt = s.pronunciation.stats || {};
   $("pron-stats").textContent = `Слов: ${stt.words ?? 0}, фраз: ${stt.phrases ?? 0}, english: ${stt.english ?? 0}, файлов: ${stt.files ?? 0}`;
   $("pron-dir").textContent = s.pronunciation.dir || s.paths.pronunciation;
+  const av = s.avatar || {};
+  $("avatar-enabled").checked = av.enabled !== false;
+  $("avatar-size").value = av.size ?? 160;
+  const avParts = [];
+  if (av.has_rig) avParts.push("риг");
+  if (av.has_image) avParts.push("свой PNG");
+  $("avatar-status").textContent = `Режим: ${av.mode || "auto"}${avParts.length ? " · " + avParts.join(", ") : ""}`;
   fillDefaultSelects();
   renderVoicesTable();
   renderEngines(st);
@@ -243,9 +266,25 @@ function collectPatch() {
     sample_rate: $("sample-rate").value ? parseInt($("sample-rate").value, 10) : null,
     out_keep: parseInt($("out-keep").value, 10),
     pronunciation: { enabled: $("pron-enabled").checked },
+    avatar: {
+      enabled: $("avatar-enabled").checked,
+      size: parseInt($("avatar-size").value, 10) || 160,
+    },
   };
   return patch;
 }
+
+$("avatar-upload").onclick = async () => {
+  const f = $("avatar-file").files?.[0];
+  if (!f) { showErr("Выберите файл"); return; }
+  const fd = new FormData();
+  fd.append("file", f);
+  const r = await fetch("/api/avatar/upload", { method: "POST", body: fd });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { showErr(data.detail || r.statusText); return; }
+  toast("Изображение загружено");
+  await loadAll();
+};
 
 $("save").onclick = async () => {
   $("save").disabled = true;
