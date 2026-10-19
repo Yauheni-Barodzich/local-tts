@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ltts — настройки</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script src="/common.js"></script>
+<style>
+  :root {
+    --bg: #F8FAFC; --surface: #FFFFFF; --surface-2: #F1F5F9; --border: #E2E8F0; --border-strong: #CBD5E1;
+    --text: #0F172A; --muted: #475569; --faint: #64748B;
+    --accent: #2563EB; --accent-hover: #1D4ED8; --on-accent: #FFFFFF; --accent-soft: #EFF6FF;
+    --ok: #15803D; --bad: #B91C1C; --bad-soft: #FEF2F2;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, Consolas, monospace; --r: 12px;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0F172A; --surface: #1B2336; --surface-2: #232C40; --border: #2B3549;
+      --text: #F8FAFC; --muted: #A5B1C2; --faint: #8391A7;
+      --accent: #60A5FA; --accent-hover: #93C5FD; --on-accent: #0F172A; --accent-soft: rgba(96,165,250,.12);
+      --ok: #4ADE80; --bad: #F87171; --bad-soft: rgba(248,113,113,.1);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0F172A; --surface: #1B2336; --surface-2: #232C40; --border: #2B3549;
+    --text: #F8FAFC; --muted: #A5B1C2; --accent: #60A5FA; --on-accent: #0F172A;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+  header h1 { margin: 0; font-size: 22px; }
+  .icon-btn { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); cursor: pointer; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 17px; }
+  .field { margin-bottom: 14px; }
+  .label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  select, input[type=number] { width: 100%; max-width: 360px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; font: inherit; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.sm { padding: 4px 10px; font-size: 13px; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--surface-2); color: var(--muted); }
+  .pill.ok { color: var(--ok); }
+  .pill.bad { color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  .mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.15); display: none; }
+  .toast.show { display: block; }
+  .error { background: var(--bad-soft); color: var(--bad); padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .error.show { display: block; }
+  pre { background: var(--surface-2); padding: 12px; border-radius: 8px; overflow: auto; font-size: 13px; }
+  .icon { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .spin { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  label.switch { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a href="/" class="btn sm">← Синтез</a>
+    <h1>Настройки</h1>
+    <button class="icon-btn" id="theme" type="button" aria-label="Тема"></button>
+    <button class="btn primary" id="save" type="button">Сохранить</button>
+  </header>
+  <div class="error" id="err"></div>
+
+  <section class="card" id="sec-general">
+    <h2>Общее</h2>
+    <p class="mono" id="meta-version"></p>
+    <p class="label">Каталог данных (LTTS_HOME)</p>
+    <p class="mono" id="path-home"></p>
+    <p class="label">Сервер</p>
+    <p class="mono" id="server-url"></p>
+    <div id="env-hints" class="label"></div>
+  </section>
+
+  <section class="card">
+    <h2>Голоса по умолчанию</h2>
+    <p class="label">Используются CLI, MCP и API, если голос не указан явно.</p>
+    <div class="field"><div class="label">Русский</div><select id="dv-ru"></select></div>
+    <div class="field"><div class="label">English</div><select id="dv-en"></select></div>
+    <div class="field"><div class="label">Deutsch</div><select id="dv-de"></select></div>
+  </section>
+
+  <section class="card">
+    <h2>Синтез</h2>
+    <div class="field">
+      <div class="label">Частота по умолчанию (LTTS_RATE / sample_rate)</div>
+      <select id="sample-rate">
+        <option value="">Авто (родная частота движка)</option>
+      </select>
+    </div>
+    <div class="field">
+      <div class="label">Файлов в каталоге out/ (ротация ltts say без -o)</div>
+      <input id="out-keep" type="number" min="0" max="1000" step="1">
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Модели и голоса</h2>
+    <div class="row" style="margin-bottom:12px">
+      <button class="btn" id="verify" type="button">Проверить sha256</button>
+      <button class="btn" id="download-rec" type="button">Скачать рекомендуемый набор</button>
+    </div>
+    <div id="engines-status" class="row" style="margin-bottom:12px"></div>
+    <table><thead><tr><th>Голос</th><th>Язык</th><th>Статус</th><th></th></tr></thead><tbody id="voices-tbody"></tbody></table>
+  </section>
+
+  <section class="card">
+    <h2>Произношение (Silero ru)</h2>
+    <label class="switch"><input type="checkbox" id="pron-enabled"> Включить словарь</label>
+    <p class="label" id="pron-stats" style="margin-top:10px"></p>
+    <p class="mono" id="pron-dir"></p>
+    <button class="btn" id="pron-reload" type="button" style="margin-top:8px">Перечитать словарь</button>
+  </section>
+
+  <section class="card">
+    <h2>Для агентов и скриптов</h2>
+    <div id="agents-mount"></div>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+let settings = null;
+let voices = [];
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2800);
+}
+
+function showErr(msg) {
+  const e = $("err");
+  e.textContent = msg;
+  e.classList.add("show");
+}
+
+function fillDefaultSelects() {
+  const langs = ["ru", "en", "de"];
+  const eff = settings.effective.default_voices;
+  for (const lang of langs) {
+    const sel = $("dv-" + lang);
+    const installed = voices.filter((v) => v.installed && (v.lang === lang || v.lang === "any"));
+    const opts = installed.length ? installed : voices.filter((v) => v.lang === lang || v.lang === "any");
+    sel.innerHTML = opts.map((v) => `<option value="${v.id}">${v.id}</option>`).join("");
+    if (eff[lang]) sel.value = eff[lang];
+  }
+}
+
+function renderVoicesTable() {
+  const tb = $("voices-tbody");
+  tb.innerHTML = voices
+    .map(
+      (v) => `<tr>
+      <td class="mono">${v.id}</td>
+      <td>${v.lang}</td>
+      <td><span class="pill ${v.installed ? "ok" : ""}">${v.installed ? "установлен" : "нет"}</span></td>
+      <td>${v.installed ? "" : `<button class="btn sm dl" data-v="${v.id}">Скачать</button>`}</td>
+    </tr>`
+    )
+    .join("");
+  tb.querySelectorAll(".dl").forEach((b) => {
+    b.onclick = async () => {
+      b.disabled = true;
+      try {
+        await fetch("/api/download", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voice: b.dataset.v }) });
+        toast("Скачано: " + b.dataset.v);
+        await loadAll();
+      } catch (e) {
+        showErr(e.message);
+      } finally {
+        b.disabled = false;
+      }
+    };
+  });
+}
+
+function renderEngines(status) {
+  $("engines-status").innerHTML = Object.entries(status.engines || {})
+    .map(([k, e]) => `<span class="pill ${e.ok ? "ok" : "bad"}">${k}: ${e.ok ? "ok" : "ошибка"}</span>`)
+    .join(" ");
+}
+
+async function loadAll() {
+  const [s, v, st] = await Promise.all([
+    fetch("/api/settings").then((r) => r.json()),
+    fetch("/api/voices").then((r) => r.json()),
+    fetch("/api/status").then((r) => r.json()),
+  ]);
+  settings = s;
+  voices = v.voices;
+  $("meta-version").textContent = `ltts ${s.version} · Windows: ${s.platform.windows ? "да" : "нет"}`;
+  $("path-home").textContent = s.paths.home;
+  $("server-url").textContent = location.origin;
+  const env = Object.entries(s.env_readonly || {});
+  $("env-hints").innerHTML = env.length
+    ? "Переопределено окружением: " + env.map(([k]) => k).join(", ")
+    : "";
+  const sr = $("sample-rate");
+  const rates = s.sample_rates || [];
+  sr.innerHTML =
+    '<option value="">Авто (родная частота движка)</option>' +
+    rates.map((r) => `<option value="${r}">${r} Hz</option>`).join("");
+  const cfgSr = s.config.sample_rate;
+  sr.value = cfgSr != null ? String(cfgSr) : "";
+  $("out-keep").value = s.effective.out_keep;
+  $("pron-enabled").checked = s.pronunciation.enabled;
+  const stt = s.pronunciation.stats || {};
+  $("pron-stats").textContent = `Слов: ${stt.words ?? 0}, фраз: ${stt.phrases ?? 0}, english: ${stt.english ?? 0}, файлов: ${stt.files ?? 0}`;
+  $("pron-dir").textContent = s.pronunciation.dir || s.paths.pronunciation;
+  fillDefaultSelects();
+  renderVoicesTable();
+  renderEngines(st);
+  lttsMountAgentsPanel($("agents-mount"), lttsAgentContextFromSettings(s), { onToast: toast });
+}
+
+function collectPatch() {
+  const patch = {
+    default_voices: {
+      ru: $("dv-ru").value,
+      en: $("dv-en").value,
+      de: $("dv-de").value,
+    },
+    sample_rate: $("sample-rate").value ? parseInt($("sample-rate").value, 10) : null,
+    out_keep: parseInt($("out-keep").value, 10),
+    pronunciation: { enabled: $("pron-enabled").checked },
+  };
+  return patch;
+}
+
+$("save").onclick = async () => {
+  $("save").disabled = true;
+  try {
+    const r = await fetch("/api/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectPatch()),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || data.error?.message || r.statusText);
+    settings = data;
+    toast("Сохранено");
+    $("err").classList.remove("show");
+  } catch (e) {
+    showErr(e.message);
+  } finally {
+    $("save").disabled = false;
+  }
+};
+
+$("verify").onclick = async () => {
+  if (!confirm("Проверить sha256 всех моделей? Битые файлы будут удалены.")) return;
+  $("verify").disabled = true;
+  try {
+    const r = await fetch("/api/doctor/verify", { method: "POST" });
+    const data = await r.json();
+    toast(`Проверено: ${data.checked}, битых: ${data.corrupt?.length || 0}`);
+    await loadAll();
+  } catch (e) {
+    showErr(e.message);
+  } finally {
+    $("verify").disabled = false;
+  }
+};
+
+$("download-rec").onclick = async () => {
+  const list = settings?.recommended_downloads || [];
+  if (!list.length || !confirm(`Скачать ${list.length} голосов? Это может занять время.`)) return;
+  $("download-rec").disabled = true;
+  try {
+    for (const vid of list) {
+      await fetch("/api/download", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ voice: vid }) });
+    }
+    toast("Рекомендуемый набор скачан");
+    await loadAll();
+  } catch (e) {
+    showErr(e.message);
+  } finally {
+    $("download-rec").disabled = false;
+  }
+};
+
+$("pron-reload").onclick = async () => {
+  const r = await fetch("/api/lexicon/reload", { method: "POST" });
+  const data = await r.json();
+  toast("Словарь перечитан");
+  const st = data.stats || {};
+  $("pron-stats").textContent = `Слов: ${st.words ?? 0}, фраз: ${st.phrases ?? 0}`;
+};
+
+lttsBindTheme($("theme"));
+loadAll().catch((e) => showErr("Сервер недоступен: " + e.message));
+</script>
+</body>
+</html>

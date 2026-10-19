@@ -55,6 +55,7 @@ ltts voices --installed
 
 # веб-морда в браузере
 ltts serve --open
+# настройки: http://127.0.0.1:8765/settings
 ```
 
 Голос по умолчанию — женский Silero (**kseniya**). Свой голос: `-v piper:denis` или `ltts default piper:denis`.  
@@ -94,11 +95,7 @@ powershell -File create-desktop-shortcut.ps1
 
 ## Агенты и интеграции
 
-**MCP** (одна строка в настройках MCP):
-
-```bash
-claude mcp add ltts -- ltts mcp
-```
+**MCP** — при запущенном desktop/serve на `http://127.0.0.1:8765/mcp` (фрагмент для Cursor — в **Настройки → Для агентов**). Без сервера: `claude mcp add ltts -- ltts mcp`.
 
 **OpenAI-совместимый TTS** (сервер должен быть запущен):
 

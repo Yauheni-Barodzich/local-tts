@@ -18,8 +18,13 @@ def test_load_from_dir(tmp_path, monkeypatch):
     d = tmp_path / "pronunciation"
     d.mkdir(parents=True)
     (d / "a.json").write_text(json.dumps({"words": {"тест": "т+ест"}}), encoding="utf-8")
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({"pronunciation": {"enabled": True}}), encoding="utf-8")
     monkeypatch.setattr("ltts.paths.HOME", tmp_path)
     monkeypatch.setattr("ltts.paths.PRONUNCIATION", d)
+    monkeypatch.setattr("ltts.paths.CONFIG", cfg)
+    monkeypatch.setattr("ltts.pronunciation.CONFIG", cfg)
+    monkeypatch.setattr("ltts.pronunciation.PRONUNCIATION", d)
     invalidate_cache()
     lex = load_lexicon(force=True)
     assert lex.words.get("тест") == "т+ест"

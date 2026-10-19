@@ -1,4 +1,4 @@
-"""MCP-сервер (stdio): инструменты speak / list_voices для агентов."""
+"""MCP: speak / list_voices. stdio (`ltts mcp`) или HTTP /mcp при desktop/serve."""
 
 from pathlib import Path
 

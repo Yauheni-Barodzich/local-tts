@@ -228,14 +228,26 @@ def render(
     return data, ordered(meta)
 
 
-OUT_KEEP = int(os.environ.get("LTTS_OUT_KEEP", "200"))
+def out_keep_limit() -> int:
+    raw = os.environ.get("LTTS_OUT_KEEP")
+    if raw is not None and raw != "":
+        return int(raw)
+    cfg = load_config().get("out_keep")
+    if cfg is not None:
+        return int(cfg)
+    return 200
+
+
+# обратная совместимость (doctor, /api/out)
+OUT_KEEP = out_keep_limit()
 
 
 def out_path(fmt: str) -> Path:
-    """Новый файл в OUT; старые ltts-* сверх OUT_KEEP (по умолчанию 200) удаляются."""
+    """Новый файл в OUT; старые ltts-* сверх лимита (по умолчанию 200) удаляются."""
     OUT.mkdir(parents=True, exist_ok=True)
-    if OUT_KEEP > 0:
-        old = sorted(OUT.glob("ltts-*"), key=lambda p: p.stat().st_mtime, reverse=True)[OUT_KEEP - 1 :]
+    keep = out_keep_limit()
+    if keep > 0:
+        old = sorted(OUT.glob("ltts-*"), key=lambda p: p.stat().st_mtime, reverse=True)[keep - 1 :]
         for p in old:
             p.unlink(missing_ok=True)
     return OUT / f"ltts-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}.{fmt}"

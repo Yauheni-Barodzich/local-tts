@@ -268,7 +268,7 @@ def cmd_serve(args) -> int:
         return 0
     _step(f"проверка порта {args.port}")
     _step(f"слушаю {url}  (Ctrl+C — остановка)")
-    print(f"ltts: {url}  (OpenAI API: {url}/v1/audio/speech)", file=sys.stderr)
+    print(f"ltts: {url}  (OpenAI API: {url}/v1/audio/speech, MCP: {url}/mcp)", file=sys.stderr)
     if args.open:
         _step("браузер откроется через 1 с")
         threading.Timer(1.0, webbrowser.open, [url]).start()

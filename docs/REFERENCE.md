@@ -94,11 +94,25 @@ ltts lexicon                                    # словарь произно�
 
 ### MCP
 
+Инструменты: `speak`, `list_voices`.
+
+**HTTP (вместе с `ltts serve` / `ltts desktop`)** — Streamable HTTP на том же порту:
+
+```json
+{
+  "mcpServers": {
+    "ltts": { "url": "http://127.0.0.1:8765/mcp" }
+  }
+}
+```
+
+Отключить: `LTTS_MCP_HTTP=0`. Проверка: `GET /health` → поле `mcp_http`.
+
+**stdio** (отдельный процесс, если сервер не запущен):
+
 ```bash
 claude mcp add ltts -- ltts mcp
 ```
-
-Инструменты: `speak`, `list_voices`.
 
 ### OpenAI-совместимый API (`ltts serve`)
 
@@ -117,6 +131,11 @@ curl -s localhost:8765/v1/audio/speech -H 'Content-Type: application/json' \
 - `GET /api/voices`
 - `POST /api/synth` — body `{text, voice, speed, format, lang, rate}`; метаданные в заголовке `X-LTTS-Meta`
 - `GET /api/status`
+- `GET /api/settings`, `PATCH /api/settings` — `config.json` (голоса по умолчанию, `sample_rate`, `out_keep`, `pronunciation.enabled`); веб-страница **`/settings`**
+- `POST /api/doctor/verify` — сверка sha256 моделей
+- `POST /api/lexicon/reload` — перечитать словарь произношения
+
+Произношение можно отключить в UI на `/settings` или через `pronunciation.enabled` в config; большие словари — только в каталоге `pronunciation/`, не в JSON.
 
 Ошибки — JSON в стиле OpenAI: `{"error": {"message", "type", "param", "code"}}` (на `/api/*` также `detail`). Коды: **400** — `invalid_request_error`; **503** — `model_unavailable` (перекачается при следующем запросе); **500** — `server_error`.
 

@@ -14,7 +14,7 @@
 }
 ```
 
-Отключить: `"enabled": false` или `LTTS_PRONUNCIATION=0`.
+Отключить: `"enabled": false`, `LTTS_PRONUNCIATION=0` или переключатель на странице **Настройки** (`/settings` в веб-морде).
 
 ## Форматы
 

@@ -44,6 +44,8 @@ packages = ["src/ltts"]
 "src/ltts/web/favicon.ico" = "ltts/web/favicon.ico"
 "src/ltts/web/favicon.png" = "ltts/web/favicon.png"
 "src/ltts/web/setup.html" = "ltts/web/setup.html"
+"src/ltts/web/settings.html" = "ltts/web/settings.html"
+"src/ltts/web/common.js" = "ltts/web/common.js"
 
 # на Linux берём CPU-сборку torch, иначе приедет CUDA на гигабайты
 [tool.uv.sources]

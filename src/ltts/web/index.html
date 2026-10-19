@@ -7,6 +7,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="/favicon.png">
+<script src="/common.js"></script>
 <style>
   /* Minimalism & Swiss: сетка, воздух, контраст. Палитра «waveform blue + recording red». Шрифты системные — офлайн. */
   :root {
@@ -263,6 +264,7 @@
       <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-valuetext="50%">
       <output id="volumeOut" for="volume">50%</output>
     </div>
+    <a class="icon-btn" id="openSettings" href="/settings" aria-label="Настройки" title="Настройки"></a>
     <button class="icon-btn" id="theme" type="button" aria-label="Тема"></button>
   </header>
 
@@ -308,13 +310,7 @@
 
       <details class="agents">
         <summary><svg class="icon chevron" data-i="chevron" aria-hidden="true"></svg><svg class="icon" data-i="terminal"></svg>Для агентов и скриптов</summary>
-        <pre>ltts say "Привет" --play
-ltts say "Hello there" --json            # английский — сам возьмёт английский голос
-echo "текст" | ltts say -v piper:denis -o out.mp3 --json
-claude mcp add ltts -- ltts mcp
-
-curl -s localhost:8765/v1/audio/speech -H 'Content-Type: application/json' \
-  -d '{"model":"silero","input":"Привет","voice":"xenia"}' -o out.mp3</pre>
+        <div id="agents-mount"></div>
       </details>
     </section>
 
@@ -380,6 +376,7 @@ const ICONS = {
   build: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
   volume: '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
 };
 const icon = (name, cls = "") => `<svg class="icon ${cls}" data-i="${name}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 function hydrateIcons(root = document) {
@@ -390,6 +387,7 @@ function hydrateIcons(root = document) {
 hydrateIcons();
 
 const $ = (id) => document.getElementById(id);
+if ($("openSettings")) $("openSettings").innerHTML = icon("settings");
 const store = {
   get(k, d) { try { const v = localStorage.getItem("ltts." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("ltts." + k, JSON.stringify(v)); } catch {} },
@@ -827,6 +825,10 @@ setGain(gainVolume);
 $("volume").addEventListener("input", (e) => setGain(+e.target.value / 100));
 updateCount(); updateHint(); renderHistory();
 Promise.all([load(), loadOutFiles()]).catch((e) => { $("err").innerHTML = `${icon("alert")}<span>Сервер недоступен: ${e.message}</span>`; $("err").hidden = false; });
+fetch("/api/settings")
+  .then((r) => r.json())
+  .then((s) => lttsMountAgentsPanel($("agents-mount"), lttsAgentContextFromSettings(s)))
+  .catch(() => lttsMountAgentsPanel($("agents-mount"), { serverUrl: location.origin, windows: /Win/i.test(navigator.userAgent) }));
 </script>
 </body>
 </html>

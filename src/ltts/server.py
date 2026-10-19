@@ -11,12 +11,13 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .audio import ALL_FORMATS, MIME
-from .core import ENGINES, OUT_KEEP, all_voices, default_voice, doctor, download, engine_voice, render
+from .core import ENGINES, all_voices, default_voice, doctor, download, engine_voice, out_keep_limit, render, verify_models
 from .engines.base import EngineError, ModelError
-from .paths import OUT
+from .mcp_http import MCP_MOUNT_PATH, create_app_lifespan, mcp_http_enabled, register_mcp_http
+from .paths import DEFAULT_HOST, DEFAULT_PORT, OUT
 from .text import LANGS, detect_lang
 
-app = FastAPI(title="ltts", version=__version__)
+app = FastAPI(title="ltts", version=__version__, lifespan=create_app_lifespan())
 
 
 # ---------- ошибки: всегда JSON. /v1/* — в формате OpenAI {"error": {...}}, /api/* — ещё и "detail" ----------
@@ -75,6 +76,13 @@ class SynthReq(BaseModel):
     rate: int | None = None  # частота на выходе: 48000, 24000, …; None — родная частота движка
 
 
+class SettingsPatch(BaseModel):
+    default_voices: dict[str, str] | None = None
+    sample_rate: int | None = None
+    out_keep: int | None = Field(None, ge=0, le=1000)
+    pronunciation: dict | None = None
+
+
 class OpenAISpeechReq(BaseModel):
     model: str = "tts-1"
     input: str
@@ -119,9 +127,18 @@ def favicon_png():
     return FileResponse(path, media_type="image/png")
 
 
+@app.get("/common.js")
+def common_js():
+    path = files("ltts") / "web" / "common.js"
+    return FileResponse(path, media_type="application/javascript")
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "app": "ltts", "version": __version__}
+    body = {"ok": True, "app": "ltts", "version": __version__}
+    if mcp_http_enabled() and getattr(app.state, "ltts_mcp_http", False):
+        body["mcp_http"] = MCP_MOUNT_PATH
+    return body
 
 
 @app.get("/api/status")
@@ -133,9 +150,47 @@ def status():
     return info
 
 
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page():
+    return (files("ltts") / "web" / "settings.html").read_text(encoding="utf-8")
+
+
 @app.get("/setup", response_class=HTMLResponse)
 def setup_page():
     return (files("ltts") / "web" / "setup.html").read_text(encoding="utf-8")
+
+
+@app.get("/api/settings")
+def api_settings_get():
+    from .settings_api import settings_snapshot
+
+    return settings_snapshot()
+
+
+@app.patch("/api/settings")
+def api_settings_patch(body: SettingsPatch):
+    from .settings_api import apply_settings
+
+    patch = body.model_dump(exclude_unset=True)
+    try:
+        return apply_settings(patch)
+    except ValueError as e:
+        raise ApiError(400, str(e)) from e
+    except EngineError as e:
+        raise _api_error_from(e) from e
+
+
+@app.post("/api/doctor/verify")
+def api_doctor_verify():
+    return verify_models()
+
+
+@app.post("/api/lexicon/reload")
+def api_lexicon_reload():
+    from .pronunciation import load_lexicon
+
+    lex = load_lexicon(force=True)
+    return {"ok": True, "stats": lex.stats}
 
 
 @app.post("/api/setup/minimal")
@@ -196,7 +251,7 @@ def list_out(limit: int = Query(200, ge=1, le=500)):
     for p in entries[:limit]:
         st = p.stat()
         files.append({"name": p.name, "size": st.st_size, "mtime": st.st_mtime})
-    return {"dir": str(OUT.resolve()), "keep": OUT_KEEP, "files": files}
+    return {"dir": str(OUT.resolve()), "keep": out_keep_limit(), "files": files}
 
 
 @app.get("/api/out/file/{name}")
@@ -263,3 +318,6 @@ def openai_models():
 @app.get("/v1/audio/voices")
 def openai_voices():
     return {"voices": [v.id for v in all_voices()]}
+
+
+register_mcp_http(app)
