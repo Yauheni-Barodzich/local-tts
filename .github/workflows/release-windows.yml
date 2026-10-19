@@ -1,0 +1,65 @@
+name: release-windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        shell: pwsh
+        run: irm https://astral.sh/uv/install.ps1 | iex
+
+      - name: Sync and test
+        shell: pwsh
+        run: |
+          $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
+          uv sync --extra desktop
+          uv pip install pytest
+          uv run python -m pytest tests/test_serve_runtime.py tests/test_desktop_setup.py -q
+
+      - name: PyInstaller
+        shell: pwsh
+        run: |
+          $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
+          uv pip install pyinstaller
+          uv run pyinstaller packaging/windows/ltts.spec --noconfirm
+
+      - name: Smoke health
+        shell: pwsh
+        run: |
+          $port = 18765
+          $job = Start-Job -ScriptBlock {
+            param($p)
+            Set-Location $using:env:GITHUB_WORKSPACE
+            $env:LTTS_PORT = $p
+            & .\dist\ltts\ltts.exe serve --port $p
+          } -ArgumentList $port
+          Start-Sleep -Seconds 45
+          try {
+            $r = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 10
+            if (-not $r.ok) { throw "health not ok" }
+          } finally {
+            Stop-Job $job -ErrorAction SilentlyContinue
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "/DRepoRoot=$env:GITHUB_WORKSPACE\" packaging/windows/ltts.iss
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ltts-windows-setup
+          path: dist/ltts-setup-*.exe

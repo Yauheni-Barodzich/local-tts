@@ -126,7 +126,25 @@ def health():
 
 @app.get("/api/status")
 def status():
-    return doctor()
+    from .desktop_setup import setup_status
+
+    info = doctor()
+    info["desktop_setup"] = setup_status()
+    return info
+
+
+@app.get("/setup", response_class=HTMLResponse)
+def setup_page():
+    return (files("ltts") / "web" / "setup.html").read_text(encoding="utf-8")
+
+
+@app.post("/api/setup/minimal")
+def api_setup_minimal():
+    from .desktop_setup import desktop_setup_complete, setup_status, start_minimal_setup_async
+
+    if not desktop_setup_complete():
+        start_minimal_setup_async()
+    return setup_status()
 
 
 @app.get("/api/voices")

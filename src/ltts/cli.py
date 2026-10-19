@@ -238,17 +238,25 @@ def cmd_tray(args) -> int:
     return run_tray(args.host, args.port)
 
 
+def cmd_desktop(args) -> int:
+    from .desktop import run_desktop
+
+    return run_desktop(
+        args.host,
+        args.port,
+        start_minimized=args.start_minimized,
+        attach_console=args.attach_console,
+    )
+
+
 def cmd_serve(args) -> int:
-    import socket
     import threading
     import webbrowser
 
+    from .serve_runtime import run_server_foreground
+
     _step("подготовка HTTP-сервера")
     _step("загрузка веб-приложения (10–30 с, torch/FastAPI)")
-    import uvicorn
-
-    from .server import app
-
     _step("приложение загружено")
 
     url = f"http://{args.host}:{args.port}"
@@ -259,17 +267,12 @@ def cmd_serve(args) -> int:
             webbrowser.open(url)
         return 0
     _step(f"проверка порта {args.port}")
-    with socket.socket() as sock:
-        try:
-            sock.bind((args.host, args.port))
-        except OSError:
-            raise RuntimeError(f"порт {args.port} занят другим процессом — `ltts serve --port <другой>` и LTTS_URL для клиентов") from None
     _step(f"слушаю {url}  (Ctrl+C — остановка)")
     print(f"ltts: {url}  (OpenAI API: {url}/v1/audio/speech)", file=sys.stderr)
     if args.open:
         _step("браузер откроется через 1 с")
         threading.Timer(1.0, webbrowser.open, [url]).start()
-    uvicorn.run(app, host=args.host, port=args.port, log_level="info")
+    run_server_foreground(args.host, args.port, log_level="info")
     return 0
 
 
@@ -379,10 +382,17 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--open", action="store_true", help="открыть в браузере")
     s.set_defaults(fn=cmd_serve)
 
-    s = sub.add_parser("tray", help="Windows: иконка в трее, управление ltts serve")
+    s = sub.add_parser("tray", help="Windows: иконка в трее (legacy: отдельный ltts serve)")
     s.add_argument("--host", default=DEFAULT_HOST)
     s.add_argument("--port", type=int, default=DEFAULT_PORT)
     s.set_defaults(fn=cmd_tray)
+
+    s = sub.add_parser("desktop", help="Windows: приложение (трей + окно, встроенный сервер)")
+    s.add_argument("--host", default=DEFAULT_HOST)
+    s.add_argument("--port", type=int, default=DEFAULT_PORT)
+    s.add_argument("--start-minimized", action="store_true", help="только иконка в трее")
+    s.add_argument("--attach-console", action="store_true", help=argparse.SUPPRESS)
+    s.set_defaults(fn=cmd_desktop)
 
     s = sub.add_parser("mcp", help="MCP-сервер (stdio) для агентов")
     s.set_defaults(fn=cmd_mcp)

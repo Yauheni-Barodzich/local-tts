@@ -33,19 +33,14 @@ def _serve_cmd(host: str, port: int) -> list[str]:
 
 
 def _load_icon_image():
-    from importlib.resources import files
-
     from PIL import Image
 
-    root = files("ltts") / "assets"
-    for name in ("tray.png", "tray.ico"):
-        path = root / name
-        if path.is_file():
-            with path.open("rb") as f:
-                img = Image.open(f)
-                img.load()
-                return img.convert("RGBA")
-    raise FileNotFoundError("tray icon not found in ltts/assets")
+    from .app_icon import tray_image_path
+
+    with tray_image_path().open("rb") as f:
+        img = Image.open(f)
+        img.load()
+        return img.convert("RGBA")
 
 
 def _tray_log(msg: str) -> None:

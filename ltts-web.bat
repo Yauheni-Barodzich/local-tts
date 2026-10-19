@@ -1,15 +1,14 @@
 @echo off
-REM Веб-морда ltts: http://127.0.0.1:8765 — сервер + браузер (см. ltts serve --open).
+REM ltts desktop: трей + своё окно (без отдельного serve в консоли).
 setlocal EnableExtensions
 chcp 65001 >nul 2>&1
 set "ROOT=%~dp0"
 set "ROOT=%ROOT:~0,-1%"
 
-if not exist "%ROOT%\ltts.cmd" (
-  echo [ltts] ltts.cmd не найден в %ROOT%
+if not exist "%ROOT%\ltts-desktop.bat" (
+  echo [ltts] ltts-desktop.bat не найден
   exit /b 1
 )
 
-call "%ROOT%\ltts-tray.bat" nopause
-call "%ROOT%\ltts.cmd" serve --open
+call "%ROOT%\ltts-desktop.bat"
 exit /b %ERRORLEVEL%

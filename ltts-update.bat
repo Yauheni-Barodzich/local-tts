@@ -23,11 +23,11 @@ if not defined UV (
 echo.
 echo  === Обновление ltts из исходников ===
 echo  %ROOT%
-echo  Только обновление CLI. Иконка трея — отдельно: ltts-tray.bat
+echo  CLI + desktop (трей/окно). Запуск: ltts-tray.bat
 echo  Закройте ltts serve / MCP / ltts tray в других окнах (Ctrl+C^).
 echo.
 
-set "TOOL_SRC=%ROOT%[tray]"
+set "TOOL_SRC=%ROOT%[desktop]"
 call :stop_ltts
 ping -n 3 127.0.0.1 >nul
 call :do_install

@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 tray = ["pystray>=0.19", "Pillow>=10.0"]
+desktop = ["pystray>=0.19", "Pillow>=10.0", "pywebview>=5.0"]
 
 [project.scripts]
 ltts = "ltts.cli:main"
@@ -35,11 +36,14 @@ packages = ["src/ltts"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/ltts/assets/logo.svg" = "ltts/assets/logo.svg"
+"src/ltts/assets/app.ico" = "ltts/assets/app.ico"
+"src/ltts/assets/app.png" = "ltts/assets/app.png"
 "src/ltts/assets/tray.ico" = "ltts/assets/tray.ico"
 "src/ltts/assets/tray.png" = "ltts/assets/tray.png"
 "src/ltts/web/favicon.svg" = "ltts/web/favicon.svg"
 "src/ltts/web/favicon.ico" = "ltts/web/favicon.ico"
 "src/ltts/web/favicon.png" = "ltts/web/favicon.png"
+"src/ltts/web/setup.html" = "ltts/web/setup.html"
 
 # на Linux берём CPU-сборку torch, иначе приедет CUDA на гигабайты
 [tool.uv.sources]

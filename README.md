@@ -5,9 +5,7 @@ Silero, Piper и RHVoice — русский, английский и немец�
 - **CLI для агентов**: `--json`, stdin, понятные коды выхода, никакого интерактива
 - **MCP-сервер**: `ltts mcp` — инструменты `speak` и `list_voices`
 - **OpenAI-совместимый API**: `POST /v1/audio/speech` — подходит любой клиент OpenAI TTS
-- **Веб-морда** для людей: `ltts serve --open`
-
-## Установка
+- **Веб-морда** для людей: `ltts serve --open` или **Windows-приложение** `ltts desktop` (трей + своё окно)
 
 **macOS / Linux:**
 
@@ -37,6 +35,20 @@ irm https://raw.githubusercontent.com/nikitakashin/local-tts/master/install.ps1 
 `cmake g++ git` на Linux). Если RHVoice не собран, он соберётся сам, когда в первый раз выберешь его голос. ffmpeg не нужен: mp3/ogg/opus/flac кодируются через libsndfile.
 
 Где лежат данные — в таблице выше; меняется через `LTTS_HOME`.
+
+### Windows-приложение
+
+Для разработки из клона: `ltts-update.bat` (ставит extra `[desktop]`), затем **`ltts-desktop.vbs`** (без консоли) или `ltts-desktop.bat` / `ltts desktop` — иконка в трее, окно на WebView2, сервер внутри процесса (без отдельной консоли `serve`). Ярлык с иконкой на рабочий стол: `powershell -File create-desktop-shortcut.ps1`. Иконки: `src/ltts/assets/app.ico` (пересборка: `uv run python scripts/build_app_icon.py`). Первый запуск сам скачивает голос **silero:kseniya**; модели и настройки — в `%LOCALAPPDATA%\ltts`.
+
+Сборка установщика (PyInstaller + Inno Setup):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File packaging/windows/build.ps1
+```
+
+Артефакты: `dist/ltts/` (onedir) и `dist/ltts-setup-0.1.0.exe`. Нужен [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/web-view2/). Подпись Authenticode для Setup.exe снижает предупреждения SmartScreen.
+
+Для терминала и агентов по-прежнему: `ltts say`, `ltts mcp`, `ltts serve` (если desktop не запущен).
 
 ## CLI
 
