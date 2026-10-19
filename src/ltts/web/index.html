@@ -613,7 +613,7 @@ function applyGainAll() {
   if (outAudio) outAudio.volume = gainVolume;
 }
 
-/** Сигнал desktop: трей, аватар, viseme (pywebview). */
+/** Сигнал агенту: трей, аватар, viseme (POST /api/playback). */
 function wireTrayPlayback(audio, speechMeta) {
   if (!audio || audio._lttsTrayWired) return;
   audio._lttsTrayWired = true;
@@ -621,10 +621,16 @@ function wireTrayPlayback(audio, speechMeta) {
   let levelTimer = null;
   let analyser = null;
   let srcNode = null;
-  const api = () => window.pywebview?.api;
-  const notify = (d) => { try { api()?.playback_delta?.(d); } catch (_) {} };
-  const notifyLevel = (v) => { try { api()?.playback_level?.(v); } catch (_) {} };
-  const notifySpeech = (text, dur) => { try { api()?.playback_speech?.(text, dur); } catch (_) {} };
+  const postPlayback = (body) => {
+    fetch("/api/playback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => {});
+  };
+  const notify = (d) => postPlayback({ delta: d });
+  const notifyLevel = (v) => postPlayback({ level: v });
+  const notifySpeech = (text, dur) => postPlayback({ text, duration: dur });
 
   function stopLevelLoop() {
     if (levelTimer) { clearInterval(levelTimer); levelTimer = null; }

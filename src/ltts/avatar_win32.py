@@ -23,6 +23,25 @@ def exclude_from_taskbar(hwnd: int) -> None:
     user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)
 
 
+def enable_avatar_transparency(form: Any) -> None:
+    """WinForms: без AllowTransparency остаётся серый BackColor формы."""
+    try:
+        from System.Drawing import Color
+
+        form.AllowTransparency = True
+        form.BackColor = Color.Transparent
+    except Exception:
+        pass
+    wv = getattr(form, "webview", None)
+    if wv is not None:
+        try:
+            from System.Drawing import Color
+
+            wv.DefaultBackgroundColor = Color.Transparent
+        except Exception:
+            pass
+
+
 def tune_avatar_form(form: Any, owner: Any = None) -> None:
     try:
         form.ShowInTaskbar = False
@@ -33,6 +52,7 @@ def tune_avatar_form(form: Any, owner: Any = None) -> None:
             form.Owner = owner
         except Exception:
             pass
+    enable_avatar_transparency(form)
     hwnd = _hwnd(form)
     if hwnd:
         exclude_from_taskbar(hwnd)

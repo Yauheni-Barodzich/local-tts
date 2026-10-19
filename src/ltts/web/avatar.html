@@ -2,16 +2,20 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="color-scheme" content="light dark">
 <title>ltts avatar</title>
 <style>
   html, body {
-    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+    margin: 0; padding: 0; overflow: hidden;
     background: transparent !important;
     background-color: transparent !important;
   }
+  html, body, #stage {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
   #stage {
-    position: relative; width: 100%; height: 100%;
     display: flex; align-items: flex-end; justify-content: center;
     overflow: hidden;
     visibility: hidden;
@@ -22,7 +26,12 @@
   #rig { position: absolute; inset: 0; background: transparent; }
   #rig canvas { width: 100%; height: 100%; background: transparent; }
   #single {
+    max-width: 100%;
     max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    object-position: bottom center;
     transform-origin: center bottom;
     filter: drop-shadow(0 2px 8px rgba(0,0,0,.2));
   }
@@ -45,6 +54,7 @@ let blinkT = 0;
 let poll = null;
 let playing = false;
 let configLoaded = false;
+let alwaysOn = false;
 
 async function loadConfig() {
   cfg = await fetch("/api/avatar/config").then((r) => r.json());
@@ -58,9 +68,13 @@ async function loadConfig() {
     $("single").hidden = true;
     $("rig").hidden = false;
   } else {
-    const url = (cfg.image_url || cfg.bundled_url) + "?t=" + Date.now();
-    $("single").src = url;
-    $("single").hidden = false;
+    const url = (
+      cfg.mode === "bundled" ? cfg.bundled_url : (cfg.image_url || cfg.bundled_url)
+    ) + "?t=" + Date.now();
+    const el = $("single");
+    el.onerror = showBundledFallback;
+    el.src = url;
+    el.hidden = false;
     $("rig").hidden = true;
   }
   configLoaded = true;
@@ -69,7 +83,6 @@ async function loadConfig() {
 function loadImg(url) {
   return new Promise((res, rej) => {
     const i = new Image();
-    i.crossOrigin = "anonymous";
     i.onload = () => res(i);
     i.onerror = rej;
     i.src = url;
@@ -116,7 +129,8 @@ function drawRig(st) {
 
 function tickSingle(st) {
   const el = $("single");
-  if (el.hidden || !st.playing) {
+  if (el.hidden) return;
+  if (!st.playing) {
     el.style.transform = "";
     return;
   }
@@ -138,10 +152,15 @@ async function pollPlayback() {
     const st = await fetch("/api/avatar/playback").then((r) => r.json());
     const was = playing;
     playing = !!st.playing;
-    stage.classList.toggle("live", playing);
+    stage.classList.toggle("live", alwaysOn || playing);
     if (playing && !was && !configLoaded) await loadConfig();
     setPollActive(playing);
-    if (!playing) return;
+    if (!playing) {
+      if (alwaysOn && configLoaded && manifest) {
+        drawRig({ playing: false, level: 0, viseme: "closed" });
+      }
+      return;
+    }
     if (manifest) drawRig(st);
     else tickSingle(st);
     const now = performance.now();
@@ -151,6 +170,20 @@ async function pollPlayback() {
       setTimeout(() => { blink = false; }, 120);
     }
   } catch (_) {}
+}
+
+const _qs = new URLSearchParams(location.search);
+function showBundledFallback() {
+  const el = $("single");
+  el.src = "/assets/avatar-default.png?t=" + Date.now();
+  el.hidden = false;
+  $("rig").hidden = true;
+  stage.classList.add("live");
+}
+alwaysOn = _qs.has("always") || _qs.get("always") === "1";
+if (alwaysOn) {
+  stage.classList.add("live");
+  loadConfig().catch(showBundledFallback);
 }
 
 poll = setInterval(pollPlayback, 250);

@@ -211,6 +211,30 @@ def api_avatar_playback():
     return hub.state.snapshot()
 
 
+class PlaybackIn(BaseModel):
+    delta: int | None = None
+    level: float | None = None
+    text: str | None = None
+    duration: float | None = None
+
+
+@app.post("/api/playback")
+def api_playback(body: PlaybackIn):
+    from .playback_hub import get_playback_hub
+
+    hub = get_playback_hub()
+    if hub is None:
+        return {"ok": False, "playing": False}
+    if body.delta is not None:
+        if hub.playback_delta(int(body.delta)):
+            hub.avatar.sync_playing(hub.state.refcount > 0)
+    if body.level is not None:
+        hub.playback_level(float(body.level))
+    if body.text is not None and body.duration is not None:
+        hub.playback_speech(str(body.text), float(body.duration))
+    return {"ok": True, "playing": hub.state.refcount > 0}
+
+
 @app.get("/api/avatar/image")
 def api_avatar_image():
     from .avatar_config import AVATAR_IMAGE

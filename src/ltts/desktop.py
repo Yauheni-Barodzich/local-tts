@@ -1,4 +1,4 @@
-"""Windows: трей + WebView2 + встроенный HTTP-сервер."""
+"""Windows: трей + встроенный сервер; браузер для UI; опционально одно окно аватара."""
 
 from __future__ import annotations
 
@@ -10,35 +10,11 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from .instance_lock import DESKTOP_PID, clear_pid, focus_desktop_window, instance_running, write_pid
+from .instance_lock import DESKTOP_PID, clear_pid, instance_running, write_pid
 from .paths import DEFAULT_HOST, DEFAULT_PORT
 from .serve_runtime import ServerHandle, start_server_background, stop_server
 
 _LOG = DESKTOP_PID.parent / "desktop.log"
-
-_SPLASH_HTML = """<!DOCTYPE html>
-<html lang="ru"><head><meta charset="utf-8"><title>ltts</title>
-<style>
-  html,body{height:100%;margin:0;font-family:system-ui,sans-serif;background:#1a1a1e;color:#e8e8ec}
-  body{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px}
-  .spin{width:28px;height:28px;border:3px solid #444;border-top-color:#7eb8ff;border-radius:50%;animation:r .8s linear infinite}
-  @keyframes r{to{transform:rotate(360deg)}}
-  p{margin:0;opacity:.85;font-size:14px}
-</style></head><body>
-<div class="spin" aria-hidden="true"></div>
-<p>ltts загружается…</p>
-<script>
-function waitApp(){
-  var api=window.pywebview&&window.pywebview.api;
-  if(!api||!api.desktop_app_url){setTimeout(waitApp,200);return;}
-  api.desktop_app_url().then(function(url){
-    if(url){location.href=url;return;}
-    setTimeout(waitApp,500);
-  }).catch(function(){setTimeout(waitApp,500);});
-}
-waitApp();
-</script>
-</body></html>"""
 
 
 def _desktop_install_hint() -> str:
@@ -108,6 +84,15 @@ def _respawn_detached(host: str, port: int, start_minimized: bool) -> bool:
     return True
 
 
+def _avatar_webview_enabled() -> bool:
+    try:
+        from .avatar_config import avatar_config
+
+        return bool(avatar_config().get("enabled", True))
+    except Exception:
+        return True
+
+
 def run_desktop(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
@@ -119,23 +104,14 @@ def run_desktop(
         return 1
     if not attach_console and _respawn_detached(host, port, start_minimized):
         return 0
+
+    base = f"http://{host}:{port}"
     if instance_running(DESKTOP_PID):
-        if focus_desktop_window():
-            print("ltts: окно выведено на передний план", file=sys.stderr)
-        else:
-            print(
-                "ltts уже запущен — иконка у часов. Перезапуск: ltts-tray.bat force",
-                file=sys.stderr,
-            )
+        webbrowser.open(f"{base}/")
+        print("ltts уже запущен — открыт интерфейс в браузере", file=sys.stderr)
         return 0
 
     _configure_stdio()
-
-    try:
-        import webview
-    except ImportError:
-        print(f"ltts desktop: нужен pywebview (extra desktop).\n  {_desktop_install_hint()}", file=sys.stderr)
-        return 1
 
     try:
         import pystray
@@ -144,22 +120,28 @@ def run_desktop(
         print(f"ltts desktop: нужны pystray и Pillow.\n  {_desktop_install_hint()}", file=sys.stderr)
         return 1
 
-    from .tray import _load_icon_image
-    from .playback_hub import DesktopJsApi, PlaybackHub, set_playback_hub
+    use_avatar_webview = _avatar_webview_enabled()
+    if use_avatar_webview:
+        try:
+            import webview
+        except ImportError:
+            print(f"ltts desktop: для аватара нужен pywebview (extra desktop).\n  {_desktop_install_hint()}", file=sys.stderr)
+            use_avatar_webview = False
 
-    base = f"http://{host}:{port}"
-    bust = ""
+    from .tray import _load_icon_image
+    from .playback_hub import PlaybackHub, set_playback_hub
+
     playback_hub = PlaybackHub()
     set_playback_hub(playback_hub)
     server_handle: ServerHandle | None = None
     owned_server = False
-    window = None
+    avatar_window = None
     icon_ref: list[pystray.Icon] = []
     shutting_down = threading.Event()
     server_ready = threading.Event()
-    nav_state = {"error": ""}
     boot_lock = threading.Lock()
     boot_started = False
+    bust = ""
 
     def page_url() -> str:
         from .desktop_setup import desktop_setup_complete
@@ -170,46 +152,27 @@ def run_desktop(
             return f"{base}/?{b}"
         return f"{base}/setup?{b}"
 
-    def _desktop_app_url() -> str:
-        if nav_state["error"]:
-            return nav_state["error"]
-        if server_ready.is_set():
-            return page_url()
-        return ""
+    def settings_url() -> str:
+        from .web_assets import web_ui_query
 
-    js_api = DesktopJsApi(playback_hub, _desktop_app_url)
+        return f"{base}/settings?{web_ui_query()}"
 
-    def _configure_avatar_window() -> None:
+    def _wait_server(seconds: float = 120) -> bool:
+        return server_ready.wait(seconds)
+
+    def _attach_avatar() -> None:
         from .avatar_config import avatar_config
 
         cfg = avatar_config()
-        if not cfg["enabled"]:
-            playback_hub.avatar.configure(f"{base}/avatar?{bust}", enabled=False, size=cfg.get("size", 160))
+        if not cfg.get("enabled", True):
+            playback_hub.avatar.configure(f"{base}/avatar?{bust}", enabled=False, size=160)
             return
-
-        av_size = int(cfg["size"])
-        av_h = int(av_size * 1.15)
-        child = webview.create_window(
-            "ltts-avatar",
-            html="<!DOCTYPE html><html><body style='margin:0;background:transparent'></body></html>",
-            width=av_size,
-            height=av_h,
-            x=-24000,
-            y=-24000,
-            frameless=True,
-            transparent=True,
-            background_color="#FFFFFF",
-            on_top=True,
-            hidden=True,
-            easy_drag=True,
-            focus=False,
-            resizable=False,
-            shadow=False,
+        playback_hub.avatar.configure(
+            f"{base}/avatar?{bust}&always=1",
+            enabled=True,
+            size=int(cfg.get("size", 160)),
         )
-        child.events.shown += lambda: playback_hub.avatar._tune()
-        playback_hub.avatar.configure(f"{base}/avatar?{bust}", enabled=True, size=av_size)
-        playback_hub.avatar.attach_window(child)
-        _log("bootstrap: окно аватара создано")
+        _log("bootstrap: аватар настроен")
 
     def _bootstrap_server() -> None:
         nonlocal server_handle, owned_server, bust
@@ -228,17 +191,14 @@ def run_desktop(
             if needs_desktop_setup():
                 start_minimal_setup_async()
 
-            _configure_avatar_window()
+            _attach_avatar()
             server_ready.set()
+            playback_hub.avatar.prime()
             if playback_hub.state.refcount > 0:
                 playback_hub.avatar.sync_playing(True)
             _log("bootstrap: готово")
         except Exception as e:
             _log(f"bootstrap_server: {e!r}")
-            nav_state["error"] = (
-                "data:text/html;charset=utf-8,"
-                "Не%20удалось%20запустить%20сервер.%20См.%20desktop.log"
-            )
             server_ready.set()
 
     def _start_server_boot() -> None:
@@ -249,30 +209,15 @@ def run_desktop(
             boot_started = True
         threading.Thread(target=_bootstrap_server, name="ltts-server-boot", daemon=True).start()
 
-    def show_window() -> None:
-        nonlocal window
-        if window is None:
-            return
+    def open_ui(_icon=None, _item=None) -> None:
         _start_server_boot()
-        try:
-            from .avatar_win32 import set_main_taskbar_visible
-            from .webview_ui import run_on_ui
+        if _wait_server(120):
+            webbrowser.open(page_url())
 
-            native = getattr(window, "native", None)
-
-            def _ui() -> None:
-                if native:
-                    set_main_taskbar_visible(native, True)
-                window.show()
-
-            run_on_ui(native, _ui)
-            focus_desktop_window()
-        except Exception as e:
-            _log(f"show_window: {e!r}")
-            try:
-                webbrowser.open(page_url())
-            except Exception:
-                pass
+    def open_settings(_icon=None, _item=None) -> None:
+        _start_server_boot()
+        if _wait_server(120):
+            webbrowser.open(settings_url())
 
     def stop_owned_server() -> None:
         nonlocal server_handle, owned_server
@@ -286,35 +231,11 @@ def run_desktop(
         playback_hub.shutdown()
         set_playback_hub(None)
         stop_owned_server()
-        if window is not None:
-            try:
-                window.destroy()
-            except Exception:
-                pass
         if icon_ref:
             try:
                 icon_ref[0].stop()
             except Exception:
                 pass
-
-    def on_closing():
-        if window is not None and not shutting_down.is_set():
-            try:
-                from .avatar_win32 import set_main_taskbar_visible
-                from .webview_ui import run_on_ui
-
-                native = getattr(window, "native", None)
-
-                def _ui() -> None:
-                    window.hide()
-                    if native:
-                        set_main_taskbar_visible(native, False)
-
-                run_on_ui(native, _ui)
-            except Exception:
-                pass
-            return False
-        return True
 
     def run_tray() -> None:
         try:
@@ -326,7 +247,8 @@ def run_desktop(
         try:
             image = _load_icon_image()
             menu = pystray.Menu(
-                item("Открыть ltts", lambda *a: show_window(), default=True),
+                item("Открыть интерфейс", open_ui, default=True),
+                item("Настройки", open_settings),
                 pystray.Menu.SEPARATOR,
                 item("Выход", quit_app),
             )
@@ -347,16 +269,6 @@ def run_desktop(
             except Exception:
                 pass
 
-    tray_thread = threading.Thread(target=run_tray, name="ltts-tray", daemon=True)
-    tray_thread.start()
-
-    try:
-        from .app_icon import app_ico
-
-        icon_path = str(app_ico())
-    except (OSError, FileNotFoundError):
-        icon_path = None
-
     if os.name == "nt":
         try:
             import ctypes
@@ -366,39 +278,61 @@ def run_desktop(
             pass
 
     try:
+        from .app_icon import app_ico
+
+        icon_path = str(app_ico())
+    except (OSError, FileNotFoundError):
+        icon_path = None
+
+    try:
         write_pid(DESKTOP_PID)
-        window = webview.create_window(
-            "ltts",
-            html=_SPLASH_HTML,
-            width=1000,
-            height=720,
-            hidden=start_minimized,
-            js_api=js_api,
-        )
-        window.events.closing += on_closing
 
-        def _on_main_shown() -> None:
-            from .avatar_win32 import set_main_taskbar_visible
-            from .webview_ui import run_on_ui
+        if use_avatar_webview:
+            from .avatar_config import avatar_config
 
-            native = getattr(window, "native", None)
+            from .avatar_window import AVATAR_ALWAYS_VISIBLE, corner_xy
 
-            def _ui() -> None:
-                if native:
-                    playback_hub.avatar.set_owner_native(native)
-                    if start_minimized:
-                        set_main_taskbar_visible(native, False)
-
-            run_on_ui(native, _ui)
+            cfg = avatar_config()
+            av_size = int(cfg.get("size", 160))
+            av_h = av_size
+            if AVATAR_ALWAYS_VISIBLE:
+                ax, ay = corner_xy(av_size, av_h)
+            else:
+                ax, ay = -24000, -24000
+            avatar_window = webview.create_window(
+                "ltts-avatar",
+                html="<!DOCTYPE html><html><body style='margin:0;background:transparent'></body></html>",
+                width=av_size,
+                height=av_h,
+                x=ax,
+                y=ay,
+                hidden=not AVATAR_ALWAYS_VISIBLE,
+                frameless=True,
+                transparent=True,
+                background_color="#FFFFFF",
+                on_top=True,
+                easy_drag=True,
+                focus=False,
+                resizable=False,
+                shadow=False,
+            )
+            playback_hub.avatar.attach_window(avatar_window)
+            bust_q = ""
+            playback_hub.avatar.configure(
+                f"{base}/avatar?{bust_q}always=1",
+                enabled=bool(cfg.get("enabled", True)),
+                size=av_size,
+            )
             _start_server_boot()
-
-        window.events.shown += _on_main_shown
-        window.events.initialized += lambda *_a: _start_server_boot()
-
-        # pywebview — только главный поток
-        webview.start(gui="edgechromium", icon=icon_path)
+            tray_thread = threading.Thread(target=run_tray, name="ltts-tray", daemon=True)
+            tray_thread.start()
+            webview.start(gui="edgechromium", icon=icon_path)
+            tray_thread.join(timeout=3)
+        else:
+            _start_server_boot()
+            run_tray()
     except Exception as e:
-        _log(f"webview error: {e!r}")
+        _log(f"desktop error: {e!r}")
         print(f"ltts desktop: {e}", file=sys.stderr)
         quit_app()
         return 1
@@ -413,5 +347,4 @@ def run_desktop(
                 icon_ref[0].stop()
             except Exception:
                 pass
-        tray_thread.join(timeout=3)
     return 0
