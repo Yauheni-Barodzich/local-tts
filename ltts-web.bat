@@ -1,14 +1,15 @@
 @echo off
-REM ltts desktop: трей + своё окно (без отдельного serve в консоли).
+REM Веб: браузер + сервер. Desktop (трей+окно): ltts.cmd или ltts-web-desktop.bat / ltts-desktop.bat
 setlocal EnableExtensions
 chcp 65001 >nul 2>&1
 set "ROOT=%~dp0"
 set "ROOT=%ROOT:~0,-1%"
 
-if not exist "%ROOT%\ltts-desktop.bat" (
-  echo [ltts] ltts-desktop.bat не найден
+if not exist "%ROOT%\ltts.cmd" (
+  echo [ltts] ltts.cmd не найден в %ROOT%
+  pause
   exit /b 1
 )
 
-call "%ROOT%\ltts-desktop.bat"
+call "%ROOT%\ltts.cmd" serve --open
 exit /b %ERRORLEVEL%

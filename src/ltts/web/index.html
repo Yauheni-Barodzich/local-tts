@@ -53,7 +53,12 @@
   .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 24px 64px; }
 
   /* ---------- шапка ---------- */
-  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  header {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin: -24px -24px 24px; padding: 24px 24px 16px;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+  }
   .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
   .logo { width: 36px; height: 36px; border-radius: 10px; background: var(--text); color: var(--bg); display: grid; place-items: center; position: relative; }
   .logo::after { content: ""; position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--rec); border: 2px solid var(--bg); }
@@ -73,10 +78,27 @@
   .vol input[type=range] { width: 96px; height: 20px; margin: 0; accent-color: var(--accent); }
   .vol output { font: 12px var(--mono); color: var(--faint); min-width: 2.75em; text-align: right; border: 0; }
 
-  /* ---------- раскладка ---------- */
-  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto 1fr; grid-template-areas: "editor aside" "history aside";
-    column-gap: 24px; align-items: start; }
-  .area-editor { grid-area: editor; } .area-history { grid-area: history; } .panel { grid-area: aside; }
+  /* ---------- вкладки ---------- */
+  .main-tabs { display: flex; gap: 4px; margin-bottom: 20px; padding: 4px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+  .main-tabs button {
+    flex: 1; min-height: 40px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent;
+    color: var(--muted); font-size: 14px; font-weight: 600; transition: background .15s, color .15s, box-shadow .15s;
+  }
+  .main-tabs button:hover { color: var(--text); }
+  .main-tabs button[aria-selected="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .main-tabs .tab-badge { font: 11px var(--mono); font-weight: 500; color: var(--faint); margin-left: 6px; }
+  .main-tabs button[aria-selected="true"] .tab-badge { color: var(--accent-text); }
+  .tab-panel[hidden] { display: none !important; }
+  .tab-panel { min-width: 0; }
+  .tab-panel .panel-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tab-panel .panel-toolbar h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin: 0; }
+  .tab-panel .panel-toolbar .hist-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .tab-panel .panel-toolbar .hist-actions span { font: 13px var(--mono); color: var(--faint); }
+  .tab-panel--blocks details.agents { margin-top: 24px; }
+
+  /* ---------- раскладка (вкладка «Блоки») ---------- */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; column-gap: 24px; align-items: start; }
+  .area-editor { grid-column: 1; } .panel { grid-column: 2; grid-row: 1; align-self: start; }
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); }
 
   /* редактор */
@@ -109,7 +131,7 @@
     display: flex; gap: 10px; align-items: flex-start; white-space: pre-wrap; border: 1px solid transparent; }
 
   /* панель настроек */
-  .panel { padding: 20px; display: grid; gap: 20px; position: sticky; top: 16px; }
+  .panel { padding: 20px; display: grid; gap: 20px; position: sticky; top: 88px; }
   .field > .label { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; font-weight: 600; color: var(--muted);
     margin-bottom: 8px; letter-spacing: .01em; }
   .field > .label output, .field > .label span { font: 13px var(--mono); font-weight: 400; color: var(--faint); }
@@ -152,11 +174,7 @@
   input[type=range] { width: 100%; accent-color: var(--accent); height: 24px; }
   .range-scale { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--faint); margin-top: -2px; }
 
-  /* история */
-  .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 32px 0 12px; gap: 12px; }
-  .section-head h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--faint); margin: 0; }
-  .hist-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .hist-actions span { font: 13px var(--mono); color: var(--faint); }
+  /* история / диск */
   .ghost.danger:hover { color: var(--bad); border-color: var(--bad); background: var(--bad-soft); }
   .history { display: grid; gap: 12px; }
   .clip { padding: 16px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px; align-items: center; }
@@ -181,7 +199,8 @@
   .empty { padding: 32px 20px; text-align: center; color: var(--faint); font-size: 14px; }
   .empty .icon { width: 28px; height: 28px; color: var(--border-strong); margin-bottom: 8px; }
   .out-dir { font: 12px var(--mono); color: var(--faint); margin: -4px 0 12px; word-break: break-all; }
-  .out-list { padding: 0; overflow: hidden; max-height: 420px; overflow-y: auto; scrollbar-width: thin; }
+  .out-list { padding: 0; overflow: hidden; max-height: min(70vh, 640px); overflow-y: auto; scrollbar-width: thin; }
+  .tab-panel--history .history { max-height: min(70vh, 720px); overflow-y: auto; scrollbar-width: thin; padding-right: 2px; }
   .out-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
   .out-row:last-child { border-bottom: 0; }
   .out-row .name { flex: 1 1 160px; font: 13px var(--mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -230,14 +249,15 @@
     font: 13px/1.6 var(--mono); color: var(--muted); overflow-x: auto; }
 
   @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; grid-template-areas: "editor" "aside" "history"; }
-    .panel { position: static; margin-top: 16px; }
+    .layout { grid-template-columns: 1fr; }
+    .area-editor { grid-column: 1; }
+    .panel { grid-column: 1; grid-row: auto; position: static; margin-top: 16px; }
     .voices { max-height: 300px; }
   }
   @media (max-width: 560px) {
     .wrap { padding: 16px 16px 48px; }
     .brand p { display: none; }
-    header { gap: 12px; }
+    header { gap: 12px; margin: -16px -16px 20px; padding: 16px 16px 12px; }
     .status { order: 3; width: 100%; }
     .editor textarea { min-height: 180px; padding: 16px; font-size: 17px; }
     .bar { padding: 12px; flex-wrap: wrap; }
@@ -268,53 +288,33 @@
     <button class="icon-btn" id="theme" type="button" aria-label="Тема"></button>
   </header>
 
-  <div class="layout">
-    <main class="area-editor">
-      <section class="card editor" aria-label="Текст">
-        <label for="text" class="sr-only">Текст для озвучки</label>
-        <textarea id="text" placeholder="Напишите или вставьте текст…" autofocus>Привет! Это локальный синтез речи — ничего не уходит в интернет.</textarea>
-        <div class="notice" id="hint" hidden></div>
-        <div class="bar">
-          <span class="meta" id="count" aria-live="polite"></span>
-          <span class="hint meta" aria-hidden="true"><kbd>⌘</kbd> <kbd>Enter</kbd></span>
-          <button class="cta" id="go" type="button"><svg class="icon" data-i="wave"></svg><span>Озвучить</span></button>
+  <nav class="main-tabs" role="tablist" aria-label="Разделы">
+    <button type="button" role="tab" id="tab-blocks" data-tab="blocks" aria-selected="true" aria-controls="panel-blocks">Блоки</button>
+    <button type="button" role="tab" id="tab-history" data-tab="history" aria-selected="false" aria-controls="panel-history">Истории<span class="tab-badge" id="tabHistBadge" hidden></span></button>
+    <button type="button" role="tab" id="tab-disk" data-tab="disk" aria-selected="false" aria-controls="panel-disk">Диск<span class="tab-badge" id="tabDiskBadge" hidden></span></button>
+  </nav>
+
+  <div class="tab-panel tab-panel--blocks" id="panel-blocks" role="tabpanel" aria-labelledby="tab-blocks" data-tab="blocks">
+    <div class="layout">
+      <main class="area-editor">
+        <section class="card editor" aria-label="Текст">
+          <label for="text" class="sr-only">Текст для озвучки</label>
+          <textarea id="text" placeholder="Напишите или вставьте текст…" autofocus>Привет! Это локальный синтез речи — ничего не уходит в интернет.</textarea>
+          <div class="notice" id="hint" hidden></div>
+          <div class="bar">
+            <span class="meta" id="count" aria-live="polite"></span>
+            <span class="hint meta" aria-hidden="true"><kbd>⌘</kbd> <kbd>Enter</kbd></span>
+            <button class="cta" id="go" type="button"><svg class="icon" data-i="wave"></svg><span>Озвучить</span></button>
+          </div>
+        </section>
+
+        <div class="card progress" id="progress" role="status" hidden>
+          <span id="progressText"></span><div class="track" aria-hidden="true"></div><time id="elapsed">0:00</time>
         </div>
-      </section>
+        <div class="error" id="err" role="alert" hidden></div>
+      </main>
 
-      <div class="card progress" id="progress" role="status" hidden>
-        <span id="progressText"></span><div class="track" aria-hidden="true"></div><time id="elapsed">0:00</time>
-      </div>
-      <div class="error" id="err" role="alert" hidden></div>
-    </main>
-
-    <section class="area-history" aria-label="История">
-      <div class="section-head">
-        <h2>История</h2>
-        <div class="hist-actions">
-          <span id="histCount"></span>
-          <button class="link-btn" id="clearHistory" type="button" hidden aria-label="Очистить историю"></button>
-        </div>
-      </div>
-      <div class="history" id="history"></div>
-
-      <div class="section-head">
-        <h2>На диске</h2>
-        <div class="hist-actions">
-          <span id="outCount"></span>
-          <button class="link-btn" id="refreshOut" type="button" aria-label="Обновить список файлов"></button>
-          <button class="link-btn" id="clearOut" type="button" hidden aria-label="Удалить все файлы на диске"></button>
-        </div>
-      </div>
-      <p class="out-dir" id="outDir" hidden></p>
-      <div class="out-list card" id="outList" aria-live="polite"></div>
-
-      <details class="agents">
-        <summary><svg class="icon chevron" data-i="chevron" aria-hidden="true"></svg><svg class="icon" data-i="terminal"></svg>Для агентов и скриптов</summary>
-        <div id="agents-mount"></div>
-      </details>
-    </section>
-
-    <aside class="card panel" aria-label="Настройки голоса">
+      <aside class="card panel" aria-label="Настройки голоса">
       <div class="field">
         <div class="label" id="langLabel">Язык</div>
         <div class="seg" id="langSeg" role="group" aria-labelledby="langLabel">
@@ -350,8 +350,37 @@
           <button type="button" data-v="wav">wav</button><button type="button" data-v="mp3">mp3</button><button type="button" data-v="ogg">ogg</button><button type="button" data-v="flac">flac</button>
         </div>
       </div>
-    </aside>
+      </aside>
+    </div>
+    <details class="agents">
+      <summary><svg class="icon chevron" data-i="chevron" aria-hidden="true"></svg><svg class="icon" data-i="terminal"></svg>Для агентов и скриптов</summary>
+      <div id="agents-mount"></div>
+    </details>
   </div>
+
+  <section class="tab-panel tab-panel--history" id="panel-history" role="tabpanel" aria-labelledby="tab-history" data-tab="history" hidden>
+    <div class="panel-toolbar">
+      <h2>История сессии</h2>
+      <div class="hist-actions">
+        <span id="histCount"></span>
+        <button class="link-btn" id="clearHistory" type="button" hidden aria-label="Очистить историю"></button>
+      </div>
+    </div>
+    <div class="history" id="history"></div>
+  </section>
+
+  <section class="tab-panel tab-panel--disk" id="panel-disk" role="tabpanel" aria-labelledby="tab-disk" data-tab="disk" hidden>
+    <div class="panel-toolbar">
+      <h2>Файлы на диске</h2>
+      <div class="hist-actions">
+        <span id="outCount"></span>
+        <button class="link-btn" id="refreshOut" type="button" aria-label="Обновить список файлов"></button>
+        <button class="link-btn" id="clearOut" type="button" hidden aria-label="Удалить все файлы на диске"></button>
+      </div>
+    </div>
+    <p class="out-dir" id="outDir" hidden></p>
+    <div class="out-list card" id="outList" aria-live="polite"></div>
+  </section>
 </div>
 
 <script>
@@ -392,6 +421,38 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("ltts." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("ltts." + k, JSON.stringify(v)); } catch {} },
 };
+
+const MAIN_TABS = ["blocks", "history", "disk"];
+function switchMainTab(name) {
+  if (!MAIN_TABS.includes(name)) name = "blocks";
+  document.querySelectorAll(".main-tabs [role=tab]").forEach((t) => {
+    const on = t.dataset.tab === name;
+    t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;
+  });
+  document.querySelectorAll(".tab-panel").forEach((p) => { p.hidden = p.dataset.tab !== name; });
+  store.set("mainTab", name);
+}
+function updateTabBadges() {
+  const hb = $("tabHistBadge"), db = $("tabDiskBadge");
+  if (hb) {
+    hb.textContent = clips.length ? String(clips.length) : "";
+    hb.hidden = !clips.length;
+  }
+  if (db) {
+    db.textContent = outFiles.length ? String(outFiles.length) : "";
+    db.hidden = !outFiles.length;
+  }
+}
+document.querySelectorAll(".main-tabs [role=tab]").forEach((btn) => {
+  btn.addEventListener("click", () => switchMainTab(btn.dataset.tab));
+  btn.addEventListener("keydown", (e) => {
+    const i = MAIN_TABS.indexOf(btn.dataset.tab);
+    if (e.key === "ArrowRight") { e.preventDefault(); switchMainTab(MAIN_TABS[(i + 1) % MAIN_TABS.length]); document.getElementById(`tab-${MAIN_TABS[(i + 1) % MAIN_TABS.length]}`)?.focus(); }
+    else if (e.key === "ArrowLeft") { e.preventDefault(); switchMainTab(MAIN_TABS[(i + MAIN_TABS.length - 1) % MAIN_TABS.length]); document.getElementById(`tab-${MAIN_TABS[(i + MAIN_TABS.length - 1) % MAIN_TABS.length]}`)?.focus(); }
+  });
+});
+switchMainTab(MAIN_TABS.includes(store.get("mainTab", "blocks")) ? store.get("mainTab", "blocks") : "blocks");
 const ENGINE_LABELS = { silero: "Silero", piper: "Piper", rhvoice: "RHVoice" };
 const engineLabel = (n) => ENGINE_LABELS[n] || state.engines[n]?.title || n;
 const catalogEngines = () => Object.keys(state.engines);
@@ -552,6 +613,19 @@ function applyGainAll() {
   if (outAudio) outAudio.volume = gainVolume;
 }
 
+/** Сигнал desktop-трею: идёт воспроизведение в WebView (pywebview). */
+function wireTrayPlayback(audio) {
+  if (!audio || audio._lttsTrayWired) return;
+  audio._lttsTrayWired = true;
+  let tracked = false;
+  const notify = (d) => { try { window.pywebview?.api?.playback_delta?.(d); } catch (_) {} };
+  const start = () => { if (!tracked) { tracked = true; notify(1); } };
+  const stop = () => { if (tracked) { tracked = false; notify(-1); } };
+  audio.addEventListener("play", start);
+  audio.addEventListener("pause", stop);
+  audio.addEventListener("ended", stop);
+}
+
 function setGain(v) {
   gainVolume = Math.min(1, Math.max(0, v));
   store.set("volume", gainVolume);
@@ -657,6 +731,7 @@ function renderHistory() {
     el.querySelector(".text").textContent = c.text;
     Object.assign(c, { el, btn: el.querySelector(".play"), canvas: el.querySelector("canvas"), wave: el.querySelector(".wave"), timeEl: el.querySelector(".time") });
     c.audio = new Audio(c.url);
+    wireTrayPlayback(c.audio);
     c.audio.volume = gainVolume;
     setPlaying(c, false);
     let raf;
@@ -677,11 +752,13 @@ function renderHistory() {
   }
   box.replaceChildren(...clips.map((c) => c.el));
   requestAnimationFrame(redrawAll);
+  updateTabBadges();
 }
 
 // ---------- файлы LTTS_HOME/out (ltts say без -o и т.д.) ----------
 let outFiles = [];
 let outAudio = new Audio();
+wireTrayPlayback(outAudio);
 outAudio.volume = gainVolume;
 const fmtBytes = (n) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
 const fmtDate = (ts) => new Date(ts * 1000).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
@@ -739,6 +816,7 @@ function renderOutList() {
       $("err").hidden = false;
     });
   });
+  updateTabBadges();
 }
 
 async function loadOutFiles() {
@@ -798,6 +876,7 @@ async function speak() {
     clips.unshift(c);
     if (clips.length > 30) disposeClip(clips.pop());
     renderHistory();
+    switchMainTab("history");
     c.audio.volume = gainVolume;
     c.audio.play().catch(() => {});
     c.peaks = await peaksFor(blob);

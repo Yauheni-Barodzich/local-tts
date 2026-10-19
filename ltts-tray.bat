@@ -15,8 +15,13 @@ if exist "%APPDATA%\uv\tools\ltts\Scripts" set "PATH=%APPDATA%\uv\tools\ltts\Scr
 set "TOOL_PY=%APPDATA%\uv\tools\ltts\Scripts\python.exe"
 set "TOOL_PYW=%APPDATA%\uv\tools\ltts\Scripts\pythonw.exe"
 set "TOOL_LTTS=%APPDATA%\uv\tools\ltts\Scripts\ltts.exe"
-if exist "%ROOT%\.venv\Scripts\python.exe" set "TOOL_PY=%ROOT%\.venv\Scripts\python.exe"
-if exist "%ROOT%\.venv\Scripts\pythonw.exe" set "TOOL_PYW=%ROOT%\.venv\Scripts\pythonw.exe"
+REM .venv без extra desktop — не подменяем uv tool (иначе ложное «Нет pywebview»)
+if exist "%ROOT%\.venv\Scripts\python.exe" (
+  "%ROOT%\.venv\Scripts\python.exe" -c "import webview" >nul 2>&1 && (
+    set "TOOL_PY=%ROOT%\.venv\Scripts\python.exe"
+    if exist "%ROOT%\.venv\Scripts\pythonw.exe" set "TOOL_PYW=%ROOT%\.venv\Scripts\pythonw.exe"
+  )
+)
 set "DESKTOP_LOG=%LOCALAPPDATA%\ltts\desktop.log"
 set "DESKTOP_PID=%LOCALAPPDATA%\ltts\desktop.pid"
 
@@ -58,9 +63,7 @@ if defined FORCE call :stop_desktop
 
 if exist "!DESKTOP_LOG!" del /f /q "!DESKTOP_LOG!" >nul 2>&1
 
-if exist "%ROOT%\.venv\Scripts\pythonw.exe" (
-  start "" /D "%ROOT%" "%ROOT%\.venv\Scripts\pythonw.exe" -m ltts.cli desktop!DESKTOP_ARGS!
-) else if exist "!TOOL_PYW!" (
+if exist "!TOOL_PYW!" (
   start "" /D "%ROOT%" "!TOOL_PYW!" -m ltts.cli desktop!DESKTOP_ARGS!
 ) else (
   powershell -NoProfile -WindowStyle Hidden -Command "Start-Process -FilePath '!TOOL_LTTS!' -ArgumentList 'desktop'!DESKTOP_ARGS! -WindowStyle Hidden -WorkingDirectory '%ROOT%'" >nul 2>&1

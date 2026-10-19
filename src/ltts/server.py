@@ -15,6 +15,7 @@ from .core import ENGINES, all_voices, default_voice, doctor, download, engine_v
 from .engines.base import EngineError, ModelError
 from .mcp_http import MCP_MOUNT_PATH, create_app_lifespan, mcp_http_enabled, register_mcp_http
 from .paths import DEFAULT_HOST, DEFAULT_PORT, OUT
+from .web_assets import HTML_NO_CACHE
 from .text import LANGS, detect_lang
 
 app = FastAPI(title="ltts", version=__version__, lifespan=create_app_lifespan())
@@ -104,9 +105,14 @@ def _audio_response(text: str, voice, speed: float, fmt: str, lang=None, rate=No
     return Response(data, media_type=MIME[fmt], headers={"X-LTTS-Meta": json.dumps(meta)})
 
 
+def _html_page(name: str) -> HTMLResponse:
+    body = (files("ltts") / "web" / name).read_text(encoding="utf-8")
+    return HTMLResponse(body, headers=HTML_NO_CACHE)
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
-    return (files("ltts") / "web" / "index.html").read_text(encoding="utf-8")
+    return _html_page("index.html")
 
 
 @app.get("/favicon.ico")
@@ -152,12 +158,12 @@ def status():
 
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page():
-    return (files("ltts") / "web" / "settings.html").read_text(encoding="utf-8")
+    return _html_page("settings.html")
 
 
 @app.get("/setup", response_class=HTMLResponse)
 def setup_page():
-    return (files("ltts") / "web" / "setup.html").read_text(encoding="utf-8")
+    return _html_page("setup.html")
 
 
 @app.get("/api/settings")

@@ -122,8 +122,15 @@ def run_desktop(
         return 1
 
     from .tray import _load_icon_image
+    from .tray_playback import DesktopJsApi, TrayPlaybackAnimator
 
-    url = f"http://{host}:{port}"
+    from .web_assets import web_ui_query
+
+    base = f"http://{host}:{port}"
+    bust = web_ui_query()
+    url = f"{base}/?{bust}"
+    tray_animator = TrayPlaybackAnimator()
+    js_api = DesktopJsApi(tray_animator)
     server_handle: ServerHandle | None = None
     owned_server = False
     window = None
@@ -139,12 +146,14 @@ def run_desktop(
 
     if needs_desktop_setup():
         start_minimal_setup_async()
-        initial = f"{url}/setup"
+        initial = f"{base}/setup?{bust}"
     else:
         initial = url
 
     def page_url() -> str:
-        return url if desktop_setup_complete() else f"{url}/setup"
+        if desktop_setup_complete():
+            return url
+        return f"{base}/setup?{bust}"
 
     def show_window() -> None:
         nonlocal window
@@ -170,6 +179,7 @@ def run_desktop(
 
     def quit_app(_icon=None, _item=None) -> None:
         shutting_down.set()
+        tray_animator.shutdown()
         stop_owned_server()
         if window is not None:
             try:
@@ -206,8 +216,12 @@ def run_desktop(
                 item("Выход", quit_app),
             )
             tray_icon = pystray.Icon("ltts", image, "ltts — локальный TTS", menu)
+
+            def _tray_setup(icon) -> None:
+                tray_animator.attach(icon)
+
             icon_ref.append(tray_icon)
-            tray_icon.run()
+            tray_icon.run(setup=_tray_setup)
         except Exception as e:
             _log(f"tray error: {e!r}")
         finally:
@@ -244,6 +258,7 @@ def run_desktop(
             width=1000,
             height=720,
             hidden=start_minimized,
+            js_api=js_api,
         )
         window.events.closing += on_closing
         # pywebview — только главный поток
@@ -257,6 +272,7 @@ def run_desktop(
         clear_pid(DESKTOP_PID)
         stop_owned_server()
         shutting_down.set()
+        tray_animator.shutdown()
         if icon_ref:
             try:
                 icon_ref[0].stop()
