@@ -6,7 +6,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from .avatar_window import AvatarWindowController
 from .tray import _load_icon_image
@@ -220,8 +220,14 @@ class PlaybackHub:
 
 
 class DesktopJsApi:
-    def __init__(self, hub: PlaybackHub) -> None:
+    def __init__(self, hub: PlaybackHub, app_url: Callable[[], str] | None = None) -> None:
         self._hub = hub
+        self._app_url = app_url
+
+    def desktop_app_url(self) -> str:
+        if self._app_url:
+            return self._app_url() or ""
+        return ""
 
     def playback_delta(self, delta: int) -> None:
         hub = self._hub

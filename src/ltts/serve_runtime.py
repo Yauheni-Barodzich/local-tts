@@ -49,6 +49,8 @@ def start_server_background(
     port: int,
     log_level: str = "warning",
     on_loaded: Callable[[], None] | None = None,
+    *,
+    wait: bool = True,
 ) -> ServerHandle | None:
     """Фоновый сервер. None — уже отвечает /health (чужой или свой экземпляр)."""
     url = f"http://{host}:{port}"
@@ -69,9 +71,10 @@ def start_server_background(
 
     thread = threading.Thread(target=_run, name="ltts-uvicorn", daemon=True)
     thread.start()
-    if not wait_server(url):
-        stop_server(ServerHandle(thread=thread, server=server, host=host, port=port))
-        raise RuntimeError(f"сервер не запустился за отведённое время: {url}")
+    if wait:
+        if not wait_server(url):
+            stop_server(ServerHandle(thread=thread, server=server, host=host, port=port))
+            raise RuntimeError(f"сервер не запустился за отведённое время: {url}")
     return ServerHandle(thread=thread, server=server, host=host, port=port)
 
 

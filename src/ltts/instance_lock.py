@@ -58,14 +58,17 @@ def _process_command_line(pid: int) -> str:
 def is_desktop_process(pid: int) -> bool:
     if not _process_alive(pid):
         return False
+    from .client import server_alive
+    from .paths import DEFAULT_HOST, DEFAULT_PORT
+
+    if server_alive(f"http://{DEFAULT_HOST}:{DEFAULT_PORT}", timeout=0.35):
+        return True
     cmd = _process_command_line(pid)
+    if cmd and _DESKTOP_CMD.search(cmd):
+        return True
     if cmd and not _DESKTOP_CMD.search(cmd):
         return False
-    if not cmd:
-        from .client import server_alive
-
-        return server_alive(timeout=0.5)
-    return True
+    return server_alive(timeout=0.5)
 
 
 def _read_pid(path: Path) -> int | None:
@@ -81,10 +84,10 @@ def instance_running(path: Path) -> bool:
     pid = _read_pid(path)
     if pid is None:
         return False
-    if path == DESKTOP_PID and not is_desktop_process(pid):
+    if not _process_alive(pid):
         path.unlink(missing_ok=True)
         return False
-    if not _process_alive(pid):
+    if path == DESKTOP_PID and not is_desktop_process(pid):
         path.unlink(missing_ok=True)
         return False
     return True

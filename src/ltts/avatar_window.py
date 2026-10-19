@@ -1,96 +1,109 @@
-"""Позиция и show/hide окна аватара (pywebview, Windows)."""
+"""Окно аватара: создаётся в bootstrap (не UI), показ — из daemon-потока через pywebview."""
 
 from __future__ import annotations
 
-import ctypes
+import logging
 import threading
-from ctypes import wintypes
 from typing import Any
 
-from .avatar_config import avatar_config
+from .avatar_win32 import tune_avatar_form
 
+_LOG = logging.getLogger(__name__)
 _OFFSCREEN = -24000
-
-
-def _work_area() -> tuple[int, int, int, int]:
-    rect = wintypes.RECT()
-    ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)
-    return rect.left, rect.top, rect.right, rect.bottom
+_ui_lock = threading.Lock()
 
 
 def corner_xy(width: int, height: int, margin: int = 12) -> tuple[int, int]:
-    left, top, right, bottom = _work_area()
-    x = right - width - margin
-    y = bottom - height - margin
-    return max(left, x), max(top, y)
+    import ctypes
+    from ctypes import wintypes
+
+    rect = wintypes.RECT()
+    ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0)
+    x = rect.right - width - margin
+    y = rect.bottom - height - margin
+    return max(rect.left, x), max(rect.top, y)
 
 
 class AvatarWindowController:
-    """Show/hide только с потока pywebview API (JS → playback_delta)."""
-
     def __init__(self) -> None:
         self._win: Any = None
-        self._lock = threading.Lock()
         self._visible = False
         self._page_url: str | None = None
         self._page_loaded = False
+        self._owner_native: Any = None
+        self._enabled = False
+        self._size = 160
 
-    def set_page_url(self, url: str) -> None:
-        self._page_url = url
+    def configure(self, page_url: str, *, enabled: bool, size: int) -> None:
+        self._page_url = page_url
+        self._enabled = bool(enabled)
+        self._size = int(size)
+
+    def attach_window(self, window: Any) -> None:
+        self._win = window
+        self._tune()
+
+    def set_owner_native(self, owner: Any) -> None:
+        self._owner_native = owner
+        self._tune()
 
     def attach(self, window: Any) -> None:
-        self._win = window
-        try:
-            window.move(_OFFSCREEN, _OFFSCREEN)
-        except Exception:
-            pass
+        """Устаревший путь: окно уже создано."""
+        self.attach_window(window)
 
     def sync_playing(self, on: bool) -> None:
-        """Вызывать из DesktopJsApi (поток WebView), не из потока трея."""
-        if on:
-            self._show()
-        else:
-            self._hide()
-
-    def _show(self) -> None:
-        from .avatar_config import avatar_config as ac
-
-        if not ac()["enabled"]:
+        if not self._enabled or self._win is None:
             return
-        win = self._win
-        if win is None or self._visible:
-            return
-        try:
-            if self._page_url and not self._page_loaded:
-                win.load_url(self._page_url)
-                self._page_loaded = True
-            size = avatar_config()["size"]
-            h = int(size * 1.15)
-            x, y = corner_xy(size, h)
-            win.resize(size, h)
-            win.move(x, y)
-            win.show()
-            self._visible = True
-        except Exception:
-            pass
+        fn = self._show_worker if on else self._hide_worker
+        threading.Thread(target=fn, name="ltts-avatar-ui", daemon=True).start()
 
-    def _hide(self) -> None:
-        win = self._win
-        if win is None or not self._visible:
-            return
-        try:
-            win.hide()
-            win.move(_OFFSCREEN, _OFFSCREEN)
-            self._visible = False
-        except Exception:
-            pass
+    def _tune(self) -> None:
+        native = getattr(self._win, "native", None) if self._win else None
+        if native:
+            tune_avatar_form(native, self._owner_native)
+
+    def _show_worker(self) -> None:
+        with _ui_lock:
+            if self._visible or not self._win:
+                return
+            win = self._win
+            try:
+                if self._page_url and not self._page_loaded:
+                    win.load_url(self._page_url)
+                    self._page_loaded = True
+                size = self._size
+                h = int(size * 1.15)
+                x, y = corner_xy(size, h)
+                win.resize(size, h)
+                win.move(x, y)
+                win.show()
+                self._visible = True
+            except Exception as e:
+                _LOG.warning("avatar show: %s", e)
+
+    def _hide_worker(self) -> None:
+        with _ui_lock:
+            win = self._win
+            if win is None or not self._visible:
+                return
+            try:
+                win.hide()
+                win.move(_OFFSCREEN, _OFFSCREEN)
+                self._visible = False
+            except Exception as e:
+                _LOG.warning("avatar hide: %s", e)
 
     def shutdown(self) -> None:
         win = self._win
-        if win:
+        self._win = None
+        self._visible = False
+        if win is None:
+            return
+
+        def _destroy() -> None:
             try:
                 win.destroy()
             except Exception:
                 pass
-        self._win = None
-        self._visible = False
+
+        threading.Thread(target=_destroy, name="ltts-avatar-close", daemon=True).start()

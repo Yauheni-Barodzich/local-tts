@@ -651,9 +651,9 @@ function wireTrayPlayback(audio, speechMeta) {
         for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
         const rms = Math.sqrt(sum / buf.length);
         notifyLevel(Math.min(1, rms * 4));
-      }, 50);
+      }, 100);
     } catch (_) {
-      levelTimer = setInterval(() => { if (!audio.paused) notifyLevel(0.35); }, 50);
+      levelTimer = setInterval(() => { if (!audio.paused) notifyLevel(0.35); }, 100);
     }
   }
 
