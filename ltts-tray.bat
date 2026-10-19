@@ -15,6 +15,8 @@ if exist "%APPDATA%\uv\tools\ltts\Scripts" set "PATH=%APPDATA%\uv\tools\ltts\Scr
 set "TOOL_PY=%APPDATA%\uv\tools\ltts\Scripts\python.exe"
 set "TOOL_PYW=%APPDATA%\uv\tools\ltts\Scripts\pythonw.exe"
 set "TOOL_LTTS=%APPDATA%\uv\tools\ltts\Scripts\ltts.exe"
+if exist "%ROOT%\.venv\Scripts\python.exe" set "TOOL_PY=%ROOT%\.venv\Scripts\python.exe"
+if exist "%ROOT%\.venv\Scripts\pythonw.exe" set "TOOL_PYW=%ROOT%\.venv\Scripts\pythonw.exe"
 set "DESKTOP_LOG=%LOCALAPPDATA%\ltts\desktop.log"
 set "DESKTOP_PID=%LOCALAPPDATA%\ltts\desktop.pid"
 
@@ -47,7 +49,8 @@ goto parse_args
 :run_desktop
 if not defined FORCE call :desktop_running && (
   echo [ltts] ltts уже запущен — иконка у часов ^(скрытые значки^).
-  echo        Перезапуск: ltts-tray.bat force
+  "!TOOL_PY!" -c "from ltts.instance_lock import focus_desktop_window; focus_desktop_window()" >nul 2>&1
+  echo        Не видно UI: ltts-tray.bat force
   goto done_ok
 )
 
@@ -87,9 +90,8 @@ if not "!EC!"=="0" goto fail
 goto done_ok
 
 :desktop_running
-if not exist "!DESKTOP_PID!" exit /b 1
-set /p DPID=<"!DESKTOP_PID!"
-tasklist /FI "PID eq !DPID!" 2>nul | find /I "python" >nul
+if not exist "!TOOL_PY!" exit /b 1
+"!TOOL_PY!" -c "from ltts.instance_lock import DESKTOP_PID, instance_running; import sys; sys.exit(0 if instance_running(DESKTOP_PID) else 1)" >nul 2>&1
 exit /b !ERRORLEVEL!
 
 :stop_desktop

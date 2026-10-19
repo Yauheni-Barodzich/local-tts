@@ -7,10 +7,11 @@ import shutil
 import subprocess
 import sys
 import threading
+import webbrowser
 from pathlib import Path
 
 from .desktop_setup import desktop_setup_complete, needs_desktop_setup, start_minimal_setup_async
-from .instance_lock import DESKTOP_PID, clear_pid, instance_running, write_pid
+from .instance_lock import DESKTOP_PID, clear_pid, focus_desktop_window, instance_running, write_pid
 from .paths import DEFAULT_HOST, DEFAULT_PORT
 from .serve_runtime import ServerHandle, start_server_background, stop_server
 
@@ -24,7 +25,7 @@ def _desktop_install_hint() -> str:
 def _log(msg: str) -> None:
     try:
         _LOG.parent.mkdir(parents=True, exist_ok=True)
-        with _LOG.open("a", encoding="utf-8") as f:
+        with (_LOG.open("a", encoding="utf-8")) as f:
             f.write(msg.rstrip() + "\n")
     except OSError:
         pass
@@ -60,7 +61,6 @@ def _build_desktop_argv(host: str, port: int, start_minimized: bool, attach_cons
 
 
 def _respawn_detached(host: str, port: int, start_minimized: bool) -> bool:
-    """Запуск без консоли (pythonw / CREATE_NO_WINDOW). True — текущий процесс можно завершить."""
     if os.name != "nt" or _desktop_worker() or not _has_console_window():
         return False
 
@@ -97,7 +97,13 @@ def run_desktop(
     if not attach_console and _respawn_detached(host, port, start_minimized):
         return 0
     if instance_running(DESKTOP_PID):
-        print("ltts desktop: уже запущен (иконка у часов)", file=sys.stderr)
+        if focus_desktop_window():
+            print("ltts: окно выведено на передний план", file=sys.stderr)
+        else:
+            print(
+                "ltts уже запущен — иконка у часов. Перезапуск: ltts-tray.bat force",
+                file=sys.stderr,
+            )
         return 0
 
     _configure_stdio()
@@ -122,7 +128,7 @@ def run_desktop(
     owned_server = False
     window = None
     icon_ref: list[pystray.Icon] = []
-    lock = threading.Lock()
+    shutting_down = threading.Event()
 
     try:
         server_handle = start_server_background(host, port, log_level="warning")
@@ -137,16 +143,23 @@ def run_desktop(
     else:
         initial = url
 
-    def open_main(_icon=None, _item=None) -> None:
-        with lock:
-            w = window
-        if w is None:
+    def page_url() -> str:
+        return url if desktop_setup_complete() else f"{url}/setup"
+
+    def show_window() -> None:
+        nonlocal window
+        if window is None:
             return
         try:
-            w.load_url(url if desktop_setup_complete() else f"{url}/setup")
-            w.show()
+            window.load_url(page_url())
+            window.show()
+            focus_desktop_window()
         except Exception as e:
-            _log(f"open_main: {e!r}")
+            _log(f"show_window: {e!r}")
+            try:
+                webbrowser.open(page_url())
+            except Exception:
+                pass
 
     def stop_owned_server() -> None:
         nonlocal server_handle, owned_server
@@ -156,44 +169,72 @@ def run_desktop(
             owned_server = False
 
     def quit_app(_icon=None, _item=None) -> None:
+        shutting_down.set()
         stop_owned_server()
-        with lock:
-            w = window
-        if w is not None:
+        if window is not None:
             try:
-                w.destroy()
+                window.destroy()
             except Exception:
                 pass
         if icon_ref:
-            icon_ref[0].stop()
+            try:
+                icon_ref[0].stop()
+            except Exception:
+                pass
+
+    def on_closing():
+        if window is not None and not shutting_down.is_set():
+            try:
+                window.hide()
+            except Exception:
+                pass
+            return False
+        return True
 
     def run_tray() -> None:
         try:
+            import pythoncom
+
+            pythoncom.CoInitialize()
+        except ImportError:
+            pass
+        try:
             image = _load_icon_image()
+            menu = pystray.Menu(
+                item("Открыть ltts", lambda *a: show_window(), default=True),
+                pystray.Menu.SEPARATOR,
+                item("Выход", quit_app),
+            )
+            tray_icon = pystray.Icon("ltts", image, "ltts — локальный TTS", menu)
+            icon_ref.append(tray_icon)
+            tray_icon.run()
         except Exception as e:
-            _log(f"tray icon: {e!r}")
-            return
-        menu = pystray.Menu(
-            item("Открыть ltts", open_main, default=True),
-            pystray.Menu.SEPARATOR,
-            item("Выход", quit_app),
-        )
-        icon = pystray.Icon("ltts", image, "ltts — локальный TTS", menu)
-        icon_ref.append(icon)
-        icon.run()
+            _log(f"tray error: {e!r}")
+        finally:
+            try:
+                import pythoncom
+
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
 
     tray_thread = threading.Thread(target=run_tray, name="ltts-tray", daemon=True)
     tray_thread.start()
 
-    def on_closing():
-        with lock:
-            w = window
-        if w is not None:
-            try:
-                w.hide()
-            except Exception:
-                pass
-        return False
+    try:
+        from .app_icon import app_ico
+
+        icon_path = str(app_ico())
+    except (OSError, FileNotFoundError):
+        icon_path = None
+
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ltts.local.desktop")
+        except Exception:
+            pass
 
     try:
         write_pid(DESKTOP_PID)
@@ -205,26 +246,21 @@ def run_desktop(
             hidden=start_minimized,
         )
         window.events.closing += on_closing
-        try:
-            from .app_icon import app_ico
-
-            icon = str(app_ico())
-        except (OSError, FileNotFoundError):
-            icon = None
-        if os.name == "nt":
-            try:
-                import ctypes
-
-                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ltts.local.desktop")
-            except Exception:
-                pass
-        webview.start(gui="edgechromium", icon=icon)
+        # pywebview — только главный поток
+        webview.start(gui="edgechromium", icon=icon_path)
     except Exception as e:
-        _log(f"desktop error: {e!r}")
+        _log(f"webview error: {e!r}")
         print(f"ltts desktop: {e}", file=sys.stderr)
         quit_app()
         return 1
     finally:
         clear_pid(DESKTOP_PID)
         stop_owned_server()
+        shutting_down.set()
+        if icon_ref:
+            try:
+                icon_ref[0].stop()
+            except Exception:
+                pass
+        tray_thread.join(timeout=3)
     return 0
