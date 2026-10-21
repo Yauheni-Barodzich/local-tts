@@ -91,6 +91,9 @@ class AvatarWindowController:
 
     def attach_window(self, window: Any) -> None:
         self._win = window
+        from .avatar_webview_patch import bind_avatar_before_show
+
+        bind_avatar_before_show(window)
         window.events.loaded += self._on_page_loaded
 
     def _on_page_loaded(self) -> None:

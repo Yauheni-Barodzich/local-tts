@@ -122,6 +122,9 @@ def run_desktop(
 
     use_avatar_webview = _avatar_webview_enabled()
     if use_avatar_webview:
+        from .avatar_webview_patch import ensure_webview2_chroma_env
+
+        ensure_webview2_chroma_env()
         try:
             import webview
         except ImportError:
@@ -308,6 +311,10 @@ def run_desktop(
 
             if avatar_dev_on:
                 prepare_pywebview_dev(log=_log)
+            from .avatar_win32 import CHROMA_HEX
+            from .avatar_webview_patch import apply_avatar_webview_patches
+
+            apply_avatar_webview_patches()
             cfg = avatar_config()
             av_size = int(cfg.get("size", 160))
             av_h = av_size
@@ -317,14 +324,19 @@ def run_desktop(
                 ax, ay = -24000, -24000
             avatar_window = webview.create_window(
                 "ltts-avatar",
-                html="<!DOCTYPE html><html><body style='margin:0;background:transparent'></body></html>",
+                html=(
+                    f"<!DOCTYPE html><html style='background:{CHROMA_HEX}'>"
+                    f"<head><meta charset='utf-8'></head>"
+                    f"<body style='margin:0;background:{CHROMA_HEX}'></body></html>"
+                ),
                 width=av_size,
                 height=av_h,
                 x=ax,
                 y=ay,
                 hidden=not AVATAR_ALWAYS_VISIBLE,
                 frameless=True,
-                transparent=True,
+                transparent=False,
+                background_color=CHROMA_HEX,
                 on_top=True,
                 easy_drag=True,
                 focus=False,

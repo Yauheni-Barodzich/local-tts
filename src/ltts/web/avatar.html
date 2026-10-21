@@ -6,8 +6,15 @@
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden;
+    background: #010102 !important;
+    background-color: #010102 !important;
+    color-scheme: light;
+    cursor: move;
+  }
+  html.preview, html.preview body {
     background: transparent !important;
     background-color: transparent !important;
+    cursor: default;
   }
   html, body, #stage {
     position: fixed;
@@ -19,6 +26,9 @@
     position: fixed;
     inset: 0;
     z-index: 0;
+    background: #010102;
+  }
+  html.preview #dragpad {
     background: transparent;
   }
   #stage {
@@ -43,12 +53,11 @@
     object-fit: contain;
     object-position: bottom center;
     transform-origin: center bottom;
-    filter: drop-shadow(0 2px 8px rgba(0,0,0,.2));
   }
 </style>
 </head>
 <body>
-<div id="dragpad" aria-hidden="true"></div>
+<div id="dragpad" class="pywebview-drag-region" aria-hidden="true"></div>
 <div id="stage">
   <img id="single" alt="" hidden>
   <div id="rig" hidden><canvas id="cv"></canvas></div>
@@ -206,6 +215,7 @@ async function pollPlayback() {
 const _qs = new URLSearchParams(location.search);
 const previewMode = _qs.has("preview") || _qs.get("preview") === "1";
 if (previewMode) {
+  document.documentElement.classList.add("preview");
   $("dragpad").style.display = "none";
   $("single").style.filter = "none";
 }

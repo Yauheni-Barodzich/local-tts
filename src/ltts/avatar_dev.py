@@ -49,14 +49,14 @@ def wait_core_webview2(window: Any, *, timeout: float = 25.0) -> bool:
         ready = {"ok": False}
 
         def probe() -> None:
-            from .avatar_win32 import set_webview2_transparent_background
+            from .avatar_win32 import set_webview2_chroma_background
 
             wv = getattr(form, "webview", None)
             if wv is not None and wv.CoreWebView2 is not None:
-                set_webview2_transparent_background(wv)
+                set_webview2_chroma_background(wv)
                 ready["ok"] = True
             elif wv is not None:
-                set_webview2_transparent_background(wv)
+                set_webview2_chroma_background(wv)
 
         run_on_ui(form, probe, block=True)
         if ready["ok"]:

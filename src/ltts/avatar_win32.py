@@ -1,64 +1,482 @@
-"""Win32: окно аватара без кнопки на панели задач."""
+"""Win32: окно аватара — color-key до WebView2 и перетаскивание через NCHITTEST."""
 
 from __future__ import annotations
 
 import ctypes
+import logging
+from ctypes import wintypes
 from typing import Any
+
+_LOG = logging.getLogger(__name__)
+
+# Точный цвет, который Win32 вырезает. Почти чёрный: кромка сглаживания выглядит тенью, не каймой.
+CHROMA_HEX = "#010102"
+CHROMA_RGB = (1, 1, 2)
+
+DWMWA_SYSTEMBACKDROP_TYPE = 38
+DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+DWMSBT_NONE = 1
+WCA_ACCENT_POLICY = 19
+ACCENT_DISABLED = 0
+WM_NCHITTEST = 0x0084
+WM_NCLBUTTONDBLCLK = 0x00A3
+WM_SYSCOMMAND = 0x0112
+HTCAPTION = 2
+HTTRANSPARENT = -1
+SC_MAXIMIZE = 0xF030
 
 GWL_EXSTYLE = -20
 WS_EX_TOOLWINDOW = 0x00000080
 WS_EX_APPWINDOW = 0x00040000
 
+DWMWA_WINDOW_CORNER_PREFERENCE = 33
+DWMWCP_DONOTROUND = 1
+
+_user32 = ctypes.WinDLL("user32", use_last_error=True)
+_user32.GetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.GetWindowLongW.restype = ctypes.c_long
+_user32.SetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_long]
+_user32.SetWindowLongW.restype = ctypes.c_long
+_user32.SetLayeredWindowAttributes.argtypes = [
+    wintypes.HWND,
+    wintypes.DWORD,
+    wintypes.BYTE,
+    wintypes.DWORD,
+]
+_user32.SetLayeredWindowAttributes.restype = wintypes.BOOL
+_user32.SetWindowPos.argtypes = [
+    wintypes.HWND,
+    wintypes.HWND,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.UINT,
+]
+_user32.SetWindowPos.restype = wintypes.BOOL
+_WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+_user32.EnumChildWindows.argtypes = [wintypes.HWND, _WNDENUMPROC, wintypes.LPARAM]
+_user32.EnumChildWindows.restype = wintypes.BOOL
+
+GWLP_WNDPROC = -4
+_WNDPROC = ctypes.WINFUNCTYPE(
+    ctypes.c_ssize_t, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM
+)
+_user32.CallWindowProcW.argtypes = [
+    ctypes.c_void_p,
+    wintypes.HWND,
+    wintypes.UINT,
+    wintypes.WPARAM,
+    wintypes.LPARAM,
+]
+_user32.CallWindowProcW.restype = ctypes.c_ssize_t
+_user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+_user32.DefWindowProcW.restype = ctypes.c_ssize_t
+_user32.GetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int]
+_user32.GetWindowLongPtrW.restype = ctypes.c_void_p
+_user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+_user32.SetWindowLongPtrW.restype = ctypes.c_void_p
+
+_form_hwnds: set[int] = set()
+_old_wndproc: dict[int, int] = {}
+
+_PAGE_BG_SCRIPT = (
+    "(function(){"
+    "var c='"
+    + CHROMA_HEX
+    + "';"
+    "function apply(){"
+    "var el=document.documentElement;"
+    "if(el) el.style.backgroundColor=c;"
+    "if(document.body) document.body.style.backgroundColor=c;"
+    "}"
+    "if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',apply);"
+    "else apply();"
+    "})();"
+)
+
+_chroma_script_added: set[int] = set()
+_enum_refs: list[Any] = []
+
 
 def _hwnd(form: Any) -> int | None:
     try:
-        return int(form.Handle.ToInt32())
+        handle = form.Handle
+        try:
+            return int(handle.ToInt64())
+        except Exception:
+            return int(handle.ToInt32())
     except Exception:
         return None
 
 
-def exclude_from_taskbar(hwnd: int) -> None:
-    user32 = ctypes.windll.user32
-    style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)
+def _hwnd_id(hwnd: int) -> int:
+    return int(hwnd) & 0xFFFFFFFFFFFFFFFF
 
 
-def set_webview2_transparent_background(wv: Any) -> None:
-    """WebView2 WinForms + CoreWebView2: DefaultBackgroundColor = Color.Transparent."""
+def _chroma_color_opaque():
+    from System.Drawing import Color
+
+    r, g, b = CHROMA_RGB
+    return Color.FromArgb(255, r, g, b)
+
+
+class _ACCENT_POLICY(ctypes.Structure):
+    _fields_ = [
+        ("AccentState", ctypes.c_int),
+        ("AccentFlags", ctypes.c_int),
+        ("GradientColor", ctypes.c_uint),
+        ("AnimationId", ctypes.c_int),
+    ]
+
+
+class _WINDOWCOMPOSITIONATTRIBDATA(ctypes.Structure):
+    _fields_ = [
+        ("Attribute", ctypes.c_int),
+        ("Data", ctypes.c_void_p),
+        ("SizeOfData", ctypes.c_size_t),
+    ]
+
+
+def _disable_window_accent(hwnd: int) -> None:
     try:
-        from System.Drawing import Color
+        accent = _ACCENT_POLICY(ACCENT_DISABLED, 0, 0, 0)
+        data = _WINDOWCOMPOSITIONATTRIBDATA(
+            WCA_ACCENT_POLICY,
+            ctypes.byref(accent),
+            ctypes.sizeof(accent),
+        )
+        ctypes.windll.user32.SetWindowCompositionAttribute(hwnd, ctypes.byref(data))
+    except Exception as e:
+        _LOG.debug("disable_window_accent: %s", e)
 
-        wv.DefaultBackgroundColor = Color.Transparent
+
+def clear_dwm_backdrop(hwnd: int) -> None:
+    try:
+        dwm = ctypes.windll.dwmapi
+        none_backdrop = ctypes.c_int(DWMSBT_NONE)
+        dwm.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_SYSTEMBACKDROP_TYPE,
+            ctypes.byref(none_backdrop),
+            ctypes.sizeof(none_backdrop),
+        )
+        dark_off = ctypes.c_int(0)
+        dwm.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
+            ctypes.byref(dark_off),
+            ctypes.sizeof(dark_off),
+        )
+        square = ctypes.c_int(DWMWCP_DONOTROUND)
+        dwm.DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            ctypes.byref(square),
+            ctypes.sizeof(square),
+        )
+    except Exception as e:
+        _LOG.debug("clear_dwm_backdrop: %s", e)
+    _disable_window_accent(hwnd)
+
+
+def exclude_from_taskbar(hwnd: int) -> None:
+    style = _user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    _user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)
+
+
+_gdi = ctypes.WinDLL("gdi32", use_last_error=True)
+_gdi.CreateCompatibleDC.argtypes = [wintypes.HDC]
+_gdi.CreateCompatibleDC.restype = wintypes.HDC
+_gdi.CreateCompatibleBitmap.argtypes = [wintypes.HDC, ctypes.c_int, ctypes.c_int]
+_gdi.CreateCompatibleBitmap.restype = wintypes.HBITMAP
+_gdi.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
+_gdi.SelectObject.restype = wintypes.HGDIOBJ
+_gdi.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+_gdi.DeleteObject.restype = wintypes.BOOL
+_gdi.DeleteDC.argtypes = [wintypes.HDC]
+_gdi.DeleteDC.restype = wintypes.BOOL
+_gdi.GetDIBits.argtypes = [
+    wintypes.HDC,
+    wintypes.HBITMAP,
+    ctypes.c_uint,
+    ctypes.c_uint,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_uint,
+]
+_gdi.GetDIBits.restype = ctypes.c_int
+_gdi.CreateRectRgn.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+_gdi.CreateRectRgn.restype = wintypes.HANDLE
+_gdi.CombineRgn.argtypes = [wintypes.HANDLE, wintypes.HANDLE, wintypes.HANDLE, ctypes.c_int]
+_gdi.CombineRgn.restype = ctypes.c_int
+_user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.c_void_p]
+_user32.GetWindowRect.restype = wintypes.BOOL
+_user32.GetDC.argtypes = [wintypes.HWND]
+_user32.GetDC.restype = wintypes.HDC
+_user32.ReleaseDC.argtypes = [wintypes.HWND, wintypes.HDC]
+_user32.PrintWindow.argtypes = [wintypes.HWND, wintypes.HDC, ctypes.c_uint]
+_user32.PrintWindow.restype = wintypes.BOOL
+_user32.SetWindowRgn.argtypes = [wintypes.HWND, wintypes.HANDLE, wintypes.BOOL]
+_user32.SetWindowRgn.restype = ctypes.c_int
+
+_PW_RENDERFULLCONTENT = 2
+_RGN_OR = 2
+_CHROMA_TOLERANCE = 16
+
+
+class _RECT(ctypes.Structure):
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long),
+    ]
+
+
+class _BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", ctypes.c_uint),
+        ("biWidth", ctypes.c_long),
+        ("biHeight", ctypes.c_long),
+        ("biPlanes", ctypes.c_ushort),
+        ("biBitCount", ctypes.c_ushort),
+        ("biCompression", ctypes.c_uint),
+        ("biSizeImage", ctypes.c_uint),
+        ("biXPelsPerMeter", ctypes.c_long),
+        ("biYPelsPerMeter", ctypes.c_long),
+        ("biClrUsed", ctypes.c_uint),
+        ("biClrImportant", ctypes.c_uint),
+    ]
+
+
+def _is_chroma(b: int, g: int, r: int) -> bool:
+    cr, cg, cb = CHROMA_RGB
+    return abs(r - cr) <= _CHROMA_TOLERANCE and abs(g - cg) <= _CHROMA_TOLERANCE and abs(b - cb) <= _CHROMA_TOLERANCE
+
+
+def _capture_client(hwnd: int) -> tuple[int, int, bytes] | None:
+    rect = _RECT()
+    if not _user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        return None
+    width = int(rect.right - rect.left)
+    height = int(rect.bottom - rect.top)
+    if width < 2 or height < 2:
+        return None
+    hdc = _user32.GetDC(hwnd)
+    if not hdc:
+        return None
+    mem = bmp = None
+    try:
+        mem = _gdi.CreateCompatibleDC(hdc)
+        bmp = _gdi.CreateCompatibleBitmap(hdc, width, height)
+        if not mem or not bmp:
+            return None
+        _gdi.SelectObject(mem, bmp)
+        if not _user32.PrintWindow(hwnd, mem, _PW_RENDERFULLCONTENT):
+            return None
+        info = _BITMAPINFOHEADER()
+        info.biSize = ctypes.sizeof(_BITMAPINFOHEADER)
+        info.biWidth = width
+        info.biHeight = -height
+        info.biPlanes = 1
+        info.biBitCount = 32
+        info.biCompression = 0
+        buf = (ctypes.c_ubyte * (width * height * 4))()
+        if _gdi.GetDIBits(mem, bmp, 0, height, buf, ctypes.byref(info), 0) == 0:
+            return None
+        return width, height, bytes(buf)
+    finally:
+        if bmp:
+            _gdi.DeleteObject(bmp)
+        if mem:
+            _gdi.DeleteDC(mem)
+        _user32.ReleaseDC(hwnd, hdc)
+
+
+def refresh_avatar_shape(form: Any) -> None:
+    """WebView2 не вырезается color-key. Окно обрезается по пикселям персонажа."""
+    hwnd = _hwnd(form)
+    if not hwnd:
+        return
+    captured = _capture_client(hwnd)
+    if captured is None:
+        _LOG.debug("avatar shape: capture failed")
+        return
+    width, height, buf = captured
+    chroma = black = other = 0
+    step = width * 4
+    for y in range(height):
+        row = y * step
+        for x in range(width):
+            i = row + x * 4
+            b, g, r = buf[i], buf[i + 1], buf[i + 2]
+            if _is_chroma(b, g, r):
+                chroma += 1
+            elif r < 8 and g < 8 and b < 8:
+                black += 1
+            else:
+                other += 1
+    content = black + other
+    if content == 0 or (other == 0 and black > width * height * 0.9):
+        _LOG.debug("avatar shape: skip content=%s black=%s other=%s", content, black, other)
+        return
+    mask = 2166136261
+    for y in range(0, height, 2):
+        row = y * step
+        for x in range(0, width, 2):
+            i = row + x * 4
+            inside = 0 if _is_chroma(buf[i], buf[i + 1], buf[i + 2]) else 1
+            mask = (mask ^ (inside + x + y * 3)) * 16777619 & 0xFFFFFFFF
+    if mask == getattr(form, "_ltts_shape", None):
+        return
+    region = _gdi.CreateRectRgn(0, 0, 0, 0)
+    if not region:
+        return
+    for y in range(height):
+        row = y * step
+        x = 0
+        while x < width:
+            i = row + x * 4
+            if _is_chroma(buf[i], buf[i + 1], buf[i + 2]):
+                x += 1
+                continue
+            start = x
+            x += 1
+            while x < width:
+                j = row + x * 4
+                if _is_chroma(buf[j], buf[j + 1], buf[j + 2]):
+                    break
+                x += 1
+            run = _gdi.CreateRectRgn(start, y, x, y + 1)
+            if run:
+                _gdi.CombineRgn(region, region, run, _RGN_OR)
+                _gdi.DeleteObject(run)
+    if _user32.SetWindowRgn(hwnd, region, True):
+        form._ltts_shape = mask
+        _LOG.debug("avatar shape: region %sx%s other=%s", width, height, other)
+    else:
+        _gdi.DeleteObject(region)
+        _LOG.warning("avatar shape: SetWindowRgn failed %s", ctypes.get_last_error())
+
+
+def _proc_addr(proc: Any) -> int:
+    return _hwnd_id(ctypes.cast(proc, ctypes.c_void_p).value or 0)
+
+
+@_WNDPROC
+def _wndproc(hwnd, msg, wparam, lparam):
+    try:
+        if msg == WM_NCHITTEST:
+            # Дети WebView2 пропускают hit-test родителю, форма отвечает как заголовок.
+            if _hwnd_id(hwnd) in _form_hwnds:
+                return HTCAPTION
+            return HTTRANSPARENT
+        if msg == WM_NCLBUTTONDBLCLK:
+            return 0
+        if msg == WM_SYSCOMMAND and (int(wparam) & 0xFFF0) == SC_MAXIMIZE:
+            return 0
+    except Exception:
+        _LOG.debug("wndproc", exc_info=True)
+    old = _old_wndproc.get(_hwnd_id(hwnd))
+    if old:
+        return _user32.CallWindowProcW(old, hwnd, msg, wparam, lparam)
+    return _user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+
+def _subclass(hwnd: int, *, is_form: bool) -> None:
+    hwnd = _hwnd_id(hwnd)
+    if is_form:
+        _form_hwnds.add(hwnd)
+    ours = _proc_addr(_wndproc)
+    current = _hwnd_id(_user32.GetWindowLongPtrW(hwnd, GWLP_WNDPROC) or 0)
+    if current == ours:
+        return
+    _old_wndproc[hwnd] = current
+    _user32.SetWindowLongPtrW(hwnd, GWLP_WNDPROC, ctypes.c_void_p(ours))
+
+
+def enable_native_drag(form: Any) -> None:
+    """Клики в WebView2 не доходят до WinForms.MouseDown — тащим через WM_NCHITTEST."""
+    hwnd = _hwnd(form)
+    if not hwnd:
+        return
+    _subclass(hwnd, is_form=True)
+    found: list[int] = []
+
+    @_WNDENUMPROC
+    def _enum(child, _lp):
+        found.append(_hwnd_id(child))
+        return True
+
+    _enum_refs.append(_enum)
+    _user32.EnumChildWindows(hwnd, _enum, 0)
+    for child in found:
+        _subclass(child, is_form=False)
+
+
+def set_webview2_chroma_background(wv: Any) -> None:
+    try:
+        opaque = _chroma_color_opaque()
+        wv.DefaultBackgroundColor = opaque
         core = wv.CoreWebView2
         if core is None:
             return
         try:
             from Microsoft.Web.WebView2.Core import CoreWebView2Color
 
+            r, g, b = CHROMA_RGB
             c = CoreWebView2Color()
-            c.A = 0
-            c.R = 0
-            c.G = 0
-            c.B = 0
+            c.A = 255
+            c.R = r
+            c.G = g
+            c.B = b
             core.DefaultBackgroundColor = c
-        except Exception:
-            core.DefaultBackgroundColor = Color.FromArgb(0, 0, 0, 0)
-    except Exception:
-        pass
+        except Exception as e:
+            _LOG.debug("CoreWebView2Color chroma: %s", e)
+            try:
+                core.DefaultBackgroundColor = opaque
+            except Exception as e2:
+                _LOG.warning("CoreWebView2 chroma bg: %s", e2)
+    except Exception as e:
+        _LOG.warning("WebView2 chroma bg: %s", e)
 
 
-def enable_avatar_transparency(form: Any) -> None:
-    """Прозрачность WebView2 и формы. Без WS_EX_LAYERED — иначе клики проходят сквозь окно."""
-    wv = getattr(form, "webview", None)
-    if wv is not None:
-        set_webview2_transparent_background(wv)
+def inject_page_chroma_background(wv: Any) -> None:
+    core = getattr(wv, "CoreWebView2", None)
+    if core is None:
+        return
+    wid = id(core)
+    if wid not in _chroma_script_added:
+        try:
+            core.AddScriptToExecuteOnDocumentCreatedAsync(_PAGE_BG_SCRIPT)
+            _chroma_script_added.add(wid)
+        except Exception as e:
+            _LOG.debug("AddScriptToExecuteOnDocumentCreated: %s", e)
     try:
-        from System.Drawing import Color
+        core.ExecuteScriptAsync(_PAGE_BG_SCRIPT)
+    except Exception as e:
+        _LOG.debug("ExecuteScript chroma bg: %s", e)
 
-        form.AllowTransparency = True
-        form.BackColor = Color.Transparent
-    except Exception:
-        pass
+
+def _schedule_avatar_retune(form: Any) -> None:
+    if getattr(form, "_ltts_retune", False):
+        return
+    form._ltts_retune = True
+    import threading
+
+    from System import Action
+
+    def _kick() -> None:
+        for _ in range(8):
+            threading.Event().wait(0.35)
+            try:
+                form.BeginInvoke(Action(lambda: tune_avatar_form(form)))
+            except Exception as e:
+                _LOG.warning("avatar retune: %s", e)
+                return
+
+    threading.Thread(target=_kick, name="ltts-avatar-shape", daemon=True).start()
 
 
 def tune_avatar_form(form: Any, owner: Any = None, *, transparency: bool = True) -> None:
@@ -72,9 +490,19 @@ def tune_avatar_form(form: Any, owner: Any = None, *, transparency: bool = True)
         except Exception:
             pass
     if transparency:
-        enable_avatar_transparency(form)
+        wv = getattr(form, "webview", None)
+        if wv is not None:
+            set_webview2_chroma_background(wv)
+            inject_page_chroma_background(wv)
+        enable_native_drag(form)
+        try:
+            refresh_avatar_shape(form)
+        except Exception as e:
+            _LOG.warning("avatar shape: %s", e)
+        _schedule_avatar_retune(form)
     hwnd = _hwnd(form)
     if hwnd:
+        clear_dwm_backdrop(hwnd)
         exclude_from_taskbar(hwnd)
 
 
