@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .avatar_window import AvatarWindowController
 
 _ENV = "LTTS_AVATAR_DEV"
+_HTML_ENV = "LTTS_AVATAR_HTML"
 _DEBUG_PORT_ENV = "LTTS_AVATAR_DEBUG_PORT"
 _watch_stop: threading.Event | None = None
 _default_debug_port = 9223
@@ -98,7 +99,7 @@ def schedule_avatar_devtools(
         if log:
             log("avatar-dev: DevTools не открылись — F12 или edge://inspect")
 
-    threading.Timer(delay_s, _try, name="ltts-avatar-devtools").start()
+    threading.Timer(delay_s, _try).start()
 
 
 def avatar_dev_enabled() -> bool:
@@ -107,8 +108,32 @@ def avatar_dev_enabled() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def dev_avatar_html_body() -> str | None:
+    if not avatar_dev_enabled():
+        return None
+    path = avatar_html_path()
+    if path is None:
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
 def avatar_html_path() -> Path | None:
-    """Файл avatar.html в установленном пакете (editable → путь в клоне)."""
+    """Dev: LTTS_AVATAR_HTML или src в клоне; иначе файл из пакета ltts."""
+    raw = os.environ.get(_HTML_ENV, "").strip()
+    if raw:
+        p = Path(raw)
+        if p.is_file():
+            return p
+    if avatar_dev_enabled():
+        here = Path(__file__).resolve().parent / "web" / "avatar.html"
+        if here.is_file():
+            return here
+        cwd = Path.cwd() / "src" / "ltts" / "web" / "avatar.html"
+        if cwd.is_file():
+            return cwd
     ref = files("ltts") / "web" / "avatar.html"
     try:
         with as_file(ref) as path:

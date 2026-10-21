@@ -15,11 +15,43 @@ DEFAULT_SIZE = 160
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
 
+def default_layout() -> dict[str, Any]:
+    return {
+        "fit": "cover",
+        "scale": 1.0,
+        "offset_x": 0,
+        "offset_y": 0,
+    }
+
+
+def normalize_layout(raw: Any) -> dict[str, Any]:
+    base = default_layout()
+    if not isinstance(raw, dict):
+        return base
+    fit = str(raw.get("fit", base["fit"])).lower()
+    if fit not in ("contain", "cover"):
+        fit = base["fit"]
+    try:
+        scale = float(raw.get("scale", base["scale"]))
+    except (TypeError, ValueError):
+        scale = base["scale"]
+    scale = max(0.25, min(3.0, scale))
+    try:
+        offset_x = int(raw.get("offset_x", base["offset_x"]))
+        offset_y = int(raw.get("offset_y", base["offset_y"]))
+    except (TypeError, ValueError):
+        offset_x, offset_y = base["offset_x"], base["offset_y"]
+    offset_x = max(-200, min(200, offset_x))
+    offset_y = max(-200, min(200, offset_y))
+    return {"fit": fit, "scale": scale, "offset_x": offset_x, "offset_y": offset_y}
+
+
 def default_avatar_config() -> dict[str, Any]:
     return {
         "enabled": True,
         "size": DEFAULT_SIZE,
         "mode": "auto",  # auto | image | rig
+        "layout": default_layout(),
     }
 
 
@@ -31,6 +63,7 @@ def avatar_config() -> dict[str, Any]:
     out = {**default_avatar_config(), **av}
     out["enabled"] = bool(out.get("enabled", True))
     out["size"] = max(80, min(400, int(out.get("size", DEFAULT_SIZE))))
+    out["layout"] = normalize_layout(out.get("layout"))
     return out
 
 
@@ -46,6 +79,10 @@ def save_avatar_config(patch: dict[str, Any]) -> dict[str, Any]:
         av["size"] = max(80, min(400, int(patch["size"])))
     if "mode" in patch and patch["mode"]:
         av["mode"] = str(patch["mode"])
+    if "layout" in patch:
+        cur = av.get("layout") if isinstance(av.get("layout"), dict) else {}
+        merged = {**cur, **patch["layout"]} if isinstance(patch["layout"], dict) else patch["layout"]
+        av["layout"] = normalize_layout(merged)
     save_config(cfg)
     return avatar_config()
 

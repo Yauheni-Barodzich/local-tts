@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ltts — кадр персонажа</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+  :root { --bg: #F8FAFC; --surface: #fff; --border: #E2E8F0; --text: #0F172A; --accent: #2563EB; --font: system-ui, sans-serif; }
+  body { margin: 0; font: 16px/1.5 var(--font); background: var(--bg); color: var(--text); }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p.hint { color: #64748B; margin: 0 0 16px; }
+  .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font: inherit; text-decoration: none; color: inherit; display: inline-block; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  .grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
+  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .preview-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .preview-box {
+    position: relative; overflow: hidden; border-radius: 12px;
+    border: 2px solid var(--border);
+    background: repeating-conic-gradient(#cbd5e1 0% 25%, #f1f5f9 0% 50%) 50% / 16px 16px;
+    box-shadow: inset 0 0 0 1px rgba(15,23,42,.08);
+  }
+  .preview-box canvas, .preview-box img {
+    display: block; width: 100%; height: 100%; object-fit: cover; object-position: bottom center;
+    transform-origin: center bottom;
+  }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .panel label { display: block; font-size: 13px; color: #64748B; margin: 12px 0 4px; }
+  .panel label:first-child { margin-top: 0; }
+  .panel input[type=range] { width: 100%; }
+  .panel .val { font-size: 12px; color: #94A3B8; float: right; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
+  .err { color: #B91C1C; margin-top: 8px; }
+  .ok { color: #15803D; margin-top: 8px; }
+  fieldset { border: none; padding: 0; margin: 8px 0 0; }
+  fieldset label { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/settings" class="btn">← Настройки</a>
+  <h1>Кадр персонажа</h1>
+  <p class="hint">Подгонка под размер окна аватара у трея. Шашечки — «пустое» место; уберите белые поля режимом «Заполнить» и масштабом.</p>
+  <div class="grid">
+    <div class="preview-wrap">
+      <div class="preview-box" id="box"><canvas id="cv"></canvas></div>
+      <span class="hint" id="size-label">160 × 160 px</span>
+    </div>
+    <div class="panel">
+      <label>Размер окна <span class="val" id="v-size"></span></label>
+      <input type="range" id="win-size" min="80" max="400" step="10" value="160">
+      <fieldset>
+        <legend class="hint" style="margin:0;padding:0">Вписывание</legend>
+        <label><input type="radio" name="fit" value="cover" checked> Заполнить</label>
+        <label><input type="radio" name="fit" value="contain"> Вместить</label>
+      </fieldset>
+      <label>Масштаб <span class="val" id="v-scale">1.00</span></label>
+      <input type="range" id="scale" min="0.25" max="2.5" step="0.01" value="1">
+      <label>Сдвиг X <span class="val" id="v-x">0</span></label>
+      <input type="range" id="off-x" min="-120" max="120" step="1" value="0">
+      <label>Сдвиг Y <span class="val" id="v-y">0</span></label>
+      <input type="range" id="off-y" min="-120" max="120" step="1" value="0">
+      <div class="row">
+        <button class="btn primary" id="save" type="button">Сохранить</button>
+        <button class="btn" id="reset" type="button">Сброс</button>
+      </div>
+      <p class="err" id="err" hidden></p>
+      <p class="ok" id="ok" hidden></p>
+    </div>
+  </div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const cv = $("cv");
+const g = cv.getContext("2d");
+let cfg = {};
+let img = null;
+let manifest = null;
+let baseImg = null;
+
+function layoutFromUi() {
+  const fit = document.querySelector('input[name="fit"]:checked')?.value || "cover";
+  return {
+    fit,
+    scale: parseFloat($("scale").value) || 1,
+    offset_x: parseInt($("off-x").value, 10) || 0,
+    offset_y: parseInt($("off-y").value, 10) || 0,
+  };
+}
+
+function fitScale(w, h, iw, ih, fit) {
+  if (!iw || !ih) return 1;
+  return fit === "cover" ? Math.max(w / iw, h / ih) : Math.min(w / iw, h / ih);
+}
+
+function drawPreview() {
+  const size = parseInt($("win-size").value, 10) || 160;
+  $("box").style.width = size + "px";
+  $("box").style.height = size + "px";
+  cv.width = size;
+  cv.height = size;
+  $("size-label").textContent = size + " × " + size + " px";
+  $("v-size").textContent = size + " px";
+  g.clearRect(0, 0, size, size);
+  const source = baseImg || img;
+  if (!source) {
+    g.fillStyle = "#94a3b8";
+    g.font = "14px system-ui,sans-serif";
+    g.textAlign = "center";
+    g.fillText("Нет изображения", size / 2, size / 2);
+    return;
+  }
+  const L = layoutFromUi();
+  const scale = fitScale(size, size, source.width, source.height, L.fit) * L.scale;
+  const bw = source.width * scale;
+  const bh = source.height * scale;
+  const ox = (size - bw) / 2 + L.offset_x;
+  const oy = size - bh + L.offset_y;
+  g.drawImage(source, ox, oy, bw, bh);
+}
+
+function syncLabels() {
+  $("v-scale").textContent = (parseFloat($("scale").value) || 1).toFixed(2);
+  $("v-x").textContent = $("off-x").value;
+  $("v-y").textContent = $("off-y").value;
+}
+
+function applyLayoutToUi(L) {
+  $("scale").value = L.scale ?? 1;
+  $("off-x").value = L.offset_x ?? 0;
+  $("off-y").value = L.offset_y ?? 0;
+  const fit = L.fit === "contain" ? "contain" : "cover";
+  document.querySelectorAll('input[name="fit"]').forEach((el) => {
+    el.checked = el.value === fit;
+  });
+  syncLabels();
+}
+
+function loadImg(url) {
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.crossOrigin = "anonymous";
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = url;
+  });
+}
+
+async function loadCharacter() {
+  cfg = await fetch("/api/avatar/config").then((r) => r.json());
+  $("win-size").value = cfg.size ?? 160;
+  applyLayoutToUi(cfg.layout || {});
+  if (cfg.mode === "rig" && cfg.rig_url) {
+    manifest = await fetch(cfg.rig_url).then((r) => r.json());
+    baseImg = await loadImg(manifest.base);
+    img = null;
+  } else {
+    manifest = null;
+    baseImg = null;
+    const url = (cfg.mode === "bundled" ? cfg.bundled_url : cfg.image_url || cfg.bundled_url) + "?t=" + Date.now();
+    img = await loadImg(url);
+  }
+  drawPreview();
+}
+
+function onChange() {
+  syncLabels();
+  drawPreview();
+}
+
+["win-size", "scale", "off-x", "off-y"].forEach((id) => {
+  $(id).addEventListener("input", onChange);
+});
+document.querySelectorAll('input[name="fit"]').forEach((el) => el.addEventListener("change", onChange));
+
+$("reset").onclick = () => {
+  applyLayoutToUi({ fit: "cover", scale: 1, offset_x: 0, offset_y: 0 });
+  drawPreview();
+};
+
+$("save").onclick = async () => {
+  $("err").hidden = true;
+  $("ok").hidden = true;
+  const layout = layoutFromUi();
+  const size = parseInt($("win-size").value, 10) || 160;
+  try {
+    const r = await fetch("/api/avatar/layout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ layout, size }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    cfg = await r.json();
+    $("ok").textContent = "Сохранено. Перезапустите desktop или дождитесь перезагрузки окна аватара.";
+    $("ok").hidden = false;
+  } catch (e) {
+    $("err").textContent = String(e);
+    $("err").hidden = false;
+  }
+};
+
+loadCharacter().catch((e) => {
+  $("err").textContent = "Не удалось загрузить персонажа: " + e;
+  $("err").hidden = false;
+});
+</script>
+</body>
+</html>

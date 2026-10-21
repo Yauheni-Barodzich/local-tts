@@ -113,6 +113,12 @@ def _audio_response(text: str, voice, speed: float, fmt: str, lang=None, rate=No
 
 
 def _html_page(name: str) -> HTMLResponse:
+    if name == "avatar.html":
+        from .avatar_dev import dev_avatar_html_body
+
+        body = dev_avatar_html_body()
+        if body is not None:
+            return HTMLResponse(body, headers=HTML_NO_CACHE)
     body = (files("ltts") / "web" / name).read_text(encoding="utf-8")
     return HTMLResponse(body, headers=HTML_NO_CACHE)
 
@@ -183,6 +189,11 @@ def avatar_rig_page():
     return _html_page("avatar-rig.html")
 
 
+@app.get("/avatar-layout", response_class=HTMLResponse)
+def avatar_layout_page():
+    return _html_page("avatar-layout.html")
+
+
 @app.get("/assets/{name}")
 def package_asset(name: str):
     if name not in ("app.png", "tray.png", "logo.svg", "avatar-default.png"):
@@ -198,6 +209,24 @@ def package_asset(name: str):
 def api_avatar_config():
     from .avatar_config import avatar_public_config
 
+    return avatar_public_config()
+
+
+@app.post("/api/avatar/layout")
+async def api_avatar_layout(request: Request):
+    from .avatar_config import avatar_public_config, normalize_layout, save_avatar_config
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    raw = body.get("layout") if isinstance(body, dict) else {}
+    if not isinstance(raw, dict):
+        raw = body if isinstance(body, dict) else {}
+    patch: dict = {"layout": normalize_layout(raw)}
+    if isinstance(body, dict) and body.get("size") is not None:
+        patch["size"] = body["size"]
+    save_avatar_config(patch)
     return avatar_public_config()
 
 

@@ -32,25 +32,27 @@ def _set_webview2_transparent_bg(wv: Any) -> None:
     try:
         from System.Drawing import Color
 
-        transparent = Color.Transparent
-        wv.DefaultBackgroundColor = transparent
+        wv.DefaultBackgroundColor = Color.Transparent
         core = wv.CoreWebView2
-        if core is not None:
+        if core is None:
+            return
+        try:
+            from Microsoft.Web.WebView2.Core import CoreWebView2Color
+
+            c = CoreWebView2Color()
+            c.A = 0
+            c.R = 0
+            c.G = 0
+            c.B = 0
+            core.DefaultBackgroundColor = c
+        except Exception:
             core.DefaultBackgroundColor = Color.FromArgb(0, 0, 0, 0)
     except Exception:
         pass
 
 
-def apply_layered_colorkey(hwnd: int, *, rgb: int = 0xFFFFFF) -> None:
-    """Белый фон окна → «дырка» без AllowTransparency (она уже поздно после Show)."""
-    user32 = ctypes.windll.user32
-    style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style | 0x00080000)
-    user32.SetLayeredWindowAttributes(hwnd, rgb, 0, 0x00000001)
-
-
 def enable_avatar_transparency(form: Any) -> None:
-    """Прозрачность после CoreWebView2; без AllowTransparency во время init."""
+    """Прозрачность после CoreWebView2. Без WS_EX_LAYERED — иначе клики проходят сквозь окно."""
     if not _core_webview2_ready(form):
         return
     wv = form.webview
@@ -58,14 +60,10 @@ def enable_avatar_transparency(form: Any) -> None:
     try:
         from System.Drawing import Color
 
-        if not form.AllowTransparency:
-            form.AllowTransparency = True
+        form.AllowTransparency = True
         form.BackColor = Color.Transparent
     except Exception:
         pass
-    hwnd = _hwnd(form)
-    if hwnd:
-        apply_layered_colorkey(hwnd)
 
 
 def tune_avatar_form(form: Any, owner: Any = None, *, transparency: bool = True) -> None:

@@ -95,6 +95,8 @@ class AvatarWindowController:
 
     def _on_page_loaded(self) -> None:
         self._tune_hwnd(transparency=True, block=True)
+        threading.Timer(0.15, lambda: self._tune_hwnd(transparency=True)).start()
+        threading.Timer(0.6, lambda: self._tune_hwnd(transparency=True)).start()
 
     def set_owner_native(self, owner: Any) -> None:
         self._owner_native = owner
@@ -122,9 +124,12 @@ class AvatarWindowController:
             threading.Timer(0.9, lambda: self._tune_hwnd(transparency=True)).start()
             _alog("prime: страница загружена")
             if avatar_dev_enabled() and self._win is not None:
-                from .avatar_dev import schedule_avatar_devtools
+                try:
+                    from .avatar_dev import schedule_avatar_devtools
 
-                schedule_avatar_devtools(self._win, log=_alog)
+                    schedule_avatar_devtools(self._win, log=_alog)
+                except Exception as e:
+                    _alog(f"prime devtools: {e!r}")
             if AVATAR_ALWAYS_VISIBLE:
                 threading.Thread(target=self._show_worker, name="ltts-avatar-ui", daemon=True).start()
         except Exception as e:

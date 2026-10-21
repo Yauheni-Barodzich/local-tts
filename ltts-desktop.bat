@@ -1,5 +1,5 @@
 @echo off
-REM ltts-desktop: tray, avatar, embedded server. Dev avatar: ltts-desktop-dev.bat
+REM ltts-desktop: tray, avatar, embedded server. Dev: ltts-desktop-dev.bat
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 set "ROOT=%~dp0"
@@ -29,12 +29,12 @@ if not exist "!TOOL_PY!" (
     start "" /D "%ROOT%" "%ROOT%\.venv\Scripts\pythonw.exe" -m ltts.cli desktop %*
     exit /b 0
   )
-  echo [ltts] Не найден uv tool ltts. Сначала: ltts-update.bat
+  echo [ltts] uv tool ltts not found. Run ltts-update.bat
   goto fail
 )
 
 "!TOOL_PY!" -c "import webview" >nul 2>&1 || (
-  echo [ltts] Нет pywebview. Запустите: ltts-update.bat
+  echo [ltts] pywebview missing. Run ltts-update.bat
   goto fail
 )
 
@@ -52,9 +52,9 @@ goto parse_args
 
 :run_desktop
 if not defined FORCE call :desktop_running && (
-  echo [ltts] ltts уже запущен — иконка у часов ^(скрытые значки^).
+  echo [ltts] Already running - check tray icons.
   "!TOOL_PY!" -c "from ltts.instance_lock import focus_desktop_window; focus_desktop_window()" >nul 2>&1
-  echo        Перезапуск: ltts-desktop.bat force
+  echo        Restart: ltts-desktop.bat force
   goto done_ok
 )
 
@@ -72,16 +72,16 @@ ping -n 6 127.0.0.1 >nul
 if exist "!DESKTOP_PID!" (
   echo.
   echo  ltts-desktop started. Tray icon near the clock.
-  echo  Лог: !DESKTOP_LOG!
+  echo  Log: !DESKTOP_LOG!
   goto done_ok
 )
-echo [ltts] Не стартовал. Смотрите !DESKTOP_LOG!
-echo        Отладка: ltts-desktop.bat console
+echo [ltts] Failed to start. See !DESKTOP_LOG!
+echo        Debug: ltts-desktop.bat console
 if exist "!DESKTOP_LOG!" type "!DESKTOP_LOG!"
 goto fail
 
 :run_console
-echo  Консольный режим — не закрывайте окно, пока нужен ltts.
+echo  Console mode - keep this window open while ltts is running.
 if exist "!TOOL_LTTS!" (
   "!TOOL_LTTS!" desktop --attach-console!DESKTOP_ARGS!
 ) else (

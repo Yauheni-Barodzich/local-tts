@@ -49,6 +49,7 @@ packages = ["src/ltts"]
 "src/ltts/web/common.js" = "ltts/web/common.js"
 "src/ltts/web/avatar.html" = "ltts/web/avatar.html"
 "src/ltts/web/avatar-rig.html" = "ltts/web/avatar-rig.html"
+"src/ltts/web/avatar-layout.html" = "ltts/web/avatar-layout.html"
 
 # на Linux берём CPU-сборку torch, иначе приедет CUDA на гигабайты
 [tool.uv.sources]
