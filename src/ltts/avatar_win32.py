@@ -219,6 +219,8 @@ _gdi.CreateRectRgn.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.
 _gdi.CreateRectRgn.restype = wintypes.HANDLE
 _gdi.CombineRgn.argtypes = [wintypes.HANDLE, wintypes.HANDLE, wintypes.HANDLE, ctypes.c_int]
 _gdi.CombineRgn.restype = ctypes.c_int
+_gdi.ExtCreateRegion.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_void_p]
+_gdi.ExtCreateRegion.restype = wintypes.HANDLE
 _user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.c_void_p]
 _user32.GetWindowRect.restype = wintypes.BOOL
 _user32.GetDC.argtypes = [wintypes.HWND]
@@ -263,19 +265,125 @@ def _matches_rgb(b: int, g: int, r: int, rgb: tuple[int, int, int], tol: int) ->
     return abs(r - cr) <= tol and abs(g - cg) <= tol and abs(b - cb) <= tol
 
 
+def _page_bg_tolerance(enabled: bool, key_tol: int) -> int:
+    """Фон страницы и чёрный кадр WebView (#000 / #010102) всегда вырезаются."""
+    if not enabled:
+        return 16
+    return max(2, min(int(key_tol), 16))
+
+
+def _content_runs(
+    buf: bytes,
+    width: int,
+    height: int,
+    page: tuple[int, int, int],
+    key_rgb: tuple[int, int, int],
+    page_tol: int,
+    key_tol: int,
+) -> tuple[list[tuple[int, int, int, int]], int]:
+    """Горизонтальные отрезки непрозрачного персонажа и хеш маски."""
+    pr, pg, pb = page
+    kr, kg, kb = key_rgb
+    use_key = key_tol >= 0
+    rects: list[tuple[int, int, int, int]] = []
+    mask = 2166136261
+    mv = memoryview(buf)
+    for y in range(height):
+        row = y * width * 4
+        x = 0
+        while x < width:
+            i = row + x * 4
+            b, g, r = mv[i], mv[i + 1], mv[i + 2]
+            bg = abs(r - pr) <= page_tol and abs(g - pg) <= page_tol and abs(b - pb) <= page_tol
+            if not bg and use_key:
+                bg = abs(r - kr) <= key_tol and abs(g - kg) <= key_tol and abs(b - kb) <= key_tol
+            if bg:
+                x += 1
+                continue
+            start = x
+            x += 1
+            while x < width:
+                j = row + x * 4
+                b, g, r = mv[j], mv[j + 1], mv[j + 2]
+                bg = abs(r - pr) <= page_tol and abs(g - pg) <= page_tol and abs(b - pb) <= page_tol
+                if not bg and use_key:
+                    bg = abs(r - kr) <= key_tol and abs(g - kg) <= key_tol and abs(b - kb) <= key_tol
+                if bg:
+                    break
+                x += 1
+            rects.append((start, y, x, y + 1))
+            mask = (mask ^ (start + (x << 8) + (y << 16))) * 16777619 & 0xFFFFFFFF
+    return rects, mask
+
+
+class _RGNDATAHEADER(ctypes.Structure):
+    _fields_ = [
+        ("dwSize", ctypes.c_uint),
+        ("iType", ctypes.c_uint),
+        ("nCount", ctypes.c_uint),
+        ("nRgnSize", ctypes.c_uint),
+        ("rcBound", _RECT),
+    ]
+
+
+_RDH_RECTANGLES = 1
+
+
+def _region_from_rects(rects: list[tuple[int, int, int, int]], width: int, height: int):
+    n = len(rects)
+    if n == 0:
+        return _gdi.CreateRectRgn(0, 0, 0, 0)
+    hdr_size = ctypes.sizeof(_RGNDATAHEADER)
+    rect_size = ctypes.sizeof(_RECT)
+    total = hdr_size + n * rect_size
+    raw = (ctypes.c_byte * total)()
+    hdr = _RGNDATAHEADER.from_buffer(raw)
+    hdr.dwSize = hdr_size
+    hdr.iType = _RDH_RECTANGLES
+    hdr.nCount = n
+    hdr.nRgnSize = n * rect_size
+    hdr.rcBound.left = 0
+    hdr.rcBound.top = 0
+    hdr.rcBound.right = width
+    hdr.rcBound.bottom = height
+    arr = (_RECT * n).from_buffer(raw, hdr_size)
+    for i, (left, top, right, bottom) in enumerate(rects):
+        arr[i].left = left
+        arr[i].top = top
+        arr[i].right = right
+        arr[i].bottom = bottom
+    region = _gdi.ExtCreateRegion(None, total, ctypes.cast(raw, ctypes.c_void_p))
+    if region:
+        return region
+    _LOG.debug("avatar shape: ExtCreateRegion failed n=%s, fallback", n)
+    region = _gdi.CreateRectRgn(0, 0, 0, 0)
+    if not region:
+        return None
+    for left, top, right, bottom in rects:
+        run = _gdi.CreateRectRgn(left, top, right, bottom)
+        if not run:
+            continue
+        _gdi.CombineRgn(region, region, run, _RGN_OR)
+        _gdi.DeleteObject(run)
+    return region
+
+
 def _is_chroma(b: int, g: int, r: int) -> bool:
     from .avatar_config import chroma_from_layout
 
     key = chroma_from_layout()
-    tol = int(key["tolerance"])
-    if _matches_rgb(b, g, r, key["rgb"], tol):
+    page_tol = _page_bg_tolerance(bool(key["enabled"]), int(key["tolerance"]))
+    if _matches_rgb(b, g, r, key["rgb"], page_tol):
         return True
     if key["enabled"]:
-        return _matches_rgb(b, g, r, key["key_rgb"], tol)
+        return _matches_rgb(b, g, r, key["key_rgb"], int(key["tolerance"]))
     return False
 
 
-def _capture_client(hwnd: int) -> tuple[int, int, bytes] | None:
+def _capture_client(hwnd: int, *, unclip: bool = False) -> tuple[int, int, bytes] | None:
+    if unclip:
+        # Пустая обрезка не даёт PrintWindow увидеть страницу — снимаем её до кадра.
+        _user32.SetWindowRgn(hwnd, None, False)
     rect = _RECT()
     if not _user32.GetWindowRect(hwnd, ctypes.byref(rect)):
         return None
@@ -314,70 +422,54 @@ def _capture_client(hwnd: int) -> tuple[int, int, bytes] | None:
         _user32.ReleaseDC(hwnd, hdc)
 
 
-def refresh_avatar_shape(form: Any) -> None:
-    """WebView2 не вырезается color-key. Окно обрезается по пикселям персонажа."""
+def refresh_avatar_shape(form: Any) -> str | int:
+    """WebView2 не вырезается color-key. Окно обрезается по пикселям персонажа.
+
+    Возвращает хеш маски, ``empty`` (кадра ещё нет) или ``fail``.
+    """
     hwnd = _hwnd(form)
     if not hwnd:
-        return
-    captured = _capture_client(hwnd)
+        return "fail"
+    had = getattr(form, "_ltts_shape", None)
+    captured = _capture_client(hwnd, unclip=(had == 0))
     if captured is None:
         _LOG.debug("avatar shape: capture failed")
-        return
+        if had == 0:
+            form._ltts_shape = None
+        return "fail"
     width, height, buf = captured
-    chroma = black = other = 0
-    step = width * 4
-    for y in range(height):
-        row = y * step
-        for x in range(width):
-            i = row + x * 4
-            b, g, r = buf[i], buf[i + 1], buf[i + 2]
-            if _is_chroma(b, g, r):
-                chroma += 1
-            elif r < 8 and g < 8 and b < 8:
-                black += 1
-            else:
-                other += 1
-    content = black + other
-    if content == 0 or (other == 0 and black > width * height * 0.9):
-        _LOG.debug("avatar shape: skip content=%s black=%s other=%s", content, black, other)
-        return
-    mask = 2166136261
-    for y in range(0, height, 2):
-        row = y * step
-        for x in range(0, width, 2):
-            i = row + x * 4
-            inside = 0 if _is_chroma(buf[i], buf[i + 1], buf[i + 2]) else 1
-            mask = (mask ^ (inside + x + y * 3)) * 16777619 & 0xFFFFFFFF
+    from .avatar_config import chroma_from_layout
+
+    key = chroma_from_layout()
+    enabled = bool(key["enabled"])
+    key_tol = int(key["tolerance"]) if enabled else -1
+    page_tol = _page_bg_tolerance(enabled, int(key["tolerance"]))
+    rects, mask = _content_runs(
+        buf,
+        width,
+        height,
+        key["rgb"],
+        key["key_rgb"],
+        page_tol,
+        key_tol,
+    )
+    if not rects:
+        # Кадра ещё нет: не прячем окно. Пустая область потом не даёт его вернуть.
+        if had == 0:
+            form._ltts_shape = None
+        return "empty"
     if mask == getattr(form, "_ltts_shape", None):
-        return
-    region = _gdi.CreateRectRgn(0, 0, 0, 0)
+        return mask
+    region = _region_from_rects(rects, width, height)
     if not region:
-        return
-    for y in range(height):
-        row = y * step
-        x = 0
-        while x < width:
-            i = row + x * 4
-            if _is_chroma(buf[i], buf[i + 1], buf[i + 2]):
-                x += 1
-                continue
-            start = x
-            x += 1
-            while x < width:
-                j = row + x * 4
-                if _is_chroma(buf[j], buf[j + 1], buf[j + 2]):
-                    break
-                x += 1
-            run = _gdi.CreateRectRgn(start, y, x, y + 1)
-            if run:
-                _gdi.CombineRgn(region, region, run, _RGN_OR)
-                _gdi.DeleteObject(run)
+        return "fail"
     if _user32.SetWindowRgn(hwnd, region, True):
         form._ltts_shape = mask
-        _LOG.debug("avatar shape: region %sx%s other=%s", width, height, other)
-    else:
-        _gdi.DeleteObject(region)
-        _LOG.warning("avatar shape: SetWindowRgn failed %s", ctypes.get_last_error())
+        _LOG.debug("avatar shape: region %sx%s runs=%s", width, height, len(rects))
+        return mask
+    _gdi.DeleteObject(region)
+    _LOG.warning("avatar shape: SetWindowRgn failed %s", ctypes.get_last_error())
+    return "fail"
 
 
 def _proc_addr(proc: Any) -> int:
@@ -482,22 +574,48 @@ def inject_page_chroma_background(wv: Any) -> None:
         _LOG.debug("ExecuteScript chroma bg: %s", e)
 
 
-def _schedule_avatar_retune(form: Any) -> None:
-    if getattr(form, "_ltts_retune", False):
-        return
-    form._ltts_retune = True
+def _schedule_avatar_shape_poll(form: Any) -> None:
+    """Пока картинка догружается, повторяем обрезку. Останавливаемся на стабильном кадре."""
+    gen = int(getattr(form, "_ltts_shape_gen", 0)) + 1
+    form._ltts_shape_gen = gen
     import threading
 
     from System import Action
 
     def _kick() -> None:
-        for _ in range(4):
-            threading.Event().wait(0.35)
-            try:
-                form.BeginInvoke(Action(lambda: tune_avatar_form(form)))
-            except Exception as e:
-                _LOG.warning("avatar retune: %s", e)
+        last: str | int | None = None
+        stable = 0
+        for _ in range(150):
+            if int(getattr(form, "_ltts_shape_gen", 0)) != gen:
                 return
+            threading.Event().wait(0.2)
+            done = threading.Event()
+            box: dict[str, Any] = {}
+
+            def _ui(box: dict[str, Any] = box, done: threading.Event = done) -> None:
+                try:
+                    box["mask"] = refresh_avatar_shape(form)
+                except Exception as e:
+                    _LOG.warning("avatar shape: %s", e)
+                    box["mask"] = "fail"
+                finally:
+                    done.set()
+
+            try:
+                form.BeginInvoke(Action(_ui))
+            except Exception as e:
+                _LOG.warning("avatar shape poll: %s", e)
+                return
+            if not done.wait(2.5):
+                return
+            mask = box.get("mask")
+            if isinstance(mask, int) and mask == last:
+                stable += 1
+                if stable >= 2:
+                    return
+            else:
+                stable = 0
+            last = mask if isinstance(mask, (int, str)) else None
 
     threading.Thread(target=_kick, name="ltts-avatar-shape", daemon=True).start()
 
@@ -519,12 +637,10 @@ def tune_avatar_form(form: Any, owner: Any = None, *, transparency: bool = True)
             inject_page_chroma_background(wv)
         enable_native_drag(form)
         try:
-            if hasattr(form, "_ltts_shape"):
-                del form._ltts_shape
             refresh_avatar_shape(form)
         except Exception as e:
             _LOG.warning("avatar shape: %s", e)
-        _schedule_avatar_retune(form)
+        _schedule_avatar_shape_poll(form)
     hwnd = _hwnd(form)
     if hwnd:
         clear_dwm_backdrop(hwnd)
