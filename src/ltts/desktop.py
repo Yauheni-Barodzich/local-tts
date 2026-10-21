@@ -128,7 +128,7 @@ def run_desktop(
             print(f"ltts desktop: для аватара нужен pywebview (extra desktop).\n  {_desktop_install_hint()}", file=sys.stderr)
             use_avatar_webview = False
 
-    from .tray import _load_icon_image
+    from .app_icon import load_tray_icon_image
     from .playback_hub import PlaybackHub, set_playback_hub
 
     playback_hub = PlaybackHub()
@@ -142,6 +142,15 @@ def run_desktop(
     boot_lock = threading.Lock()
     boot_started = False
     bust = ""
+    from .avatar_dev import (
+        avatar_dev_enabled,
+        prepare_pywebview_dev,
+        start_avatar_html_watch,
+        stop_avatar_html_watch,
+    )
+
+    avatar_dev_on = avatar_dev_enabled()
+    avatar_dev_stop: threading.Event | None = None
 
     def page_url() -> str:
         from .desktop_setup import desktop_setup_complete
@@ -175,7 +184,7 @@ def run_desktop(
         _log("bootstrap: аватар настроен")
 
     def _bootstrap_server() -> None:
-        nonlocal server_handle, owned_server, bust
+        nonlocal server_handle, owned_server, bust, avatar_dev_stop
         _log("bootstrap: старт")
         try:
             from .web_assets import web_ui_query
@@ -194,6 +203,11 @@ def run_desktop(
             _attach_avatar()
             server_ready.set()
             playback_hub.avatar.prime()
+            if avatar_dev_on and use_avatar_webview and avatar_dev_stop is None:
+                avatar_dev_stop = start_avatar_html_watch(
+                    playback_hub.avatar,
+                    log=_log,
+                )
             if playback_hub.state.refcount > 0:
                 playback_hub.avatar.sync_playing(True)
             _log("bootstrap: готово")
@@ -245,7 +259,7 @@ def run_desktop(
         except ImportError:
             pass
         try:
-            image = _load_icon_image()
+            image = load_tray_icon_image()
             menu = pystray.Menu(
                 item("Открыть интерфейс", open_ui, default=True),
                 item("Настройки", open_settings),
@@ -292,6 +306,8 @@ def run_desktop(
 
             from .avatar_window import AVATAR_ALWAYS_VISIBLE, corner_xy
 
+            if avatar_dev_on:
+                prepare_pywebview_dev(log=_log)
             cfg = avatar_config()
             av_size = int(cfg.get("size", 160))
             av_h = av_size
@@ -326,7 +342,9 @@ def run_desktop(
             _start_server_boot()
             tray_thread = threading.Thread(target=run_tray, name="ltts-tray", daemon=True)
             tray_thread.start()
-            webview.start(gui="edgechromium", icon=icon_path)
+            if avatar_dev_on:
+                _log("avatar-dev: WebView2 debug + watch avatar.html")
+            webview.start(gui="edgechromium", icon=icon_path, debug=avatar_dev_on)
             tray_thread.join(timeout=3)
         else:
             _start_server_boot()
@@ -337,6 +355,7 @@ def run_desktop(
         quit_app()
         return 1
     finally:
+        stop_avatar_html_watch(avatar_dev_stop)
         clear_pid(DESKTOP_PID)
         stop_owned_server()
         shutting_down.set()

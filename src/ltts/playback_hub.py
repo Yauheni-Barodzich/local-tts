@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .avatar_window import AvatarWindowController
-from .tray import _load_icon_image
+from .app_icon import load_tray_icon_image
 from .viseme import schedule_from_text, viseme_at
 
 _IDLE_TITLE = "ltts — локальный TTS"
@@ -108,7 +108,7 @@ def load_tray_animation_frames(size: int = 64) -> tuple[object, list[object]]:
     from PIL import Image
 
     try:
-        idle = _load_icon_image().resize((size, size), Image.Resampling.LANCZOS)
+        idle = load_tray_icon_image().resize((size, size), Image.Resampling.LANCZOS)
     except OSError:
         idle = _draw_tray_frame(size, _FRAME_SPECS[0][0], 1.0)
     frames = [_draw_tray_frame(size, bars, dot) for bars, dot in _FRAME_SPECS]

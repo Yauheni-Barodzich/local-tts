@@ -48,17 +48,53 @@ class AvatarWindowController:
         self._enabled = False
         self._size = 160
 
+    @property
+    def page_url(self) -> str | None:
+        return self._page_url
+
     def configure(self, page_url: str, *, enabled: bool, size: int) -> None:
         self._page_url = page_url
         self._enabled = bool(enabled)
         self._size = int(size)
 
+    def reload_page(self, url: str | None = None) -> None:
+        """Повторный load_url (dev: после правок avatar.html)."""
+        threading.Thread(
+            target=self._reload_worker,
+            args=(url,),
+            name="ltts-avatar-reload",
+            daemon=True,
+        ).start()
+
+    def _reload_worker(self, url: str | None) -> None:
+        win = self._win
+        if not win or not self._enabled:
+            return
+        target = url or self._page_url
+        if not target:
+            return
+        if not win.events.shown.wait(60):
+            _alog("reload: timeout shown")
+            return
+        from .avatar_dev import wait_core_webview2
+
+        wait_core_webview2(win, timeout=8.0)
+        with _ui_lock:
+            try:
+                win.load_url(target)
+                self._page_loaded = True
+                self._tune_hwnd()
+                threading.Timer(0.35, self._tune_hwnd).start()
+                _alog(f"reload: {target}")
+            except Exception as e:
+                _alog(f"reload: {e!r}")
+
     def attach_window(self, window: Any) -> None:
         self._win = window
-        window.events.before_show += self._on_before_show
+        window.events.loaded += self._on_page_loaded
 
-    def _on_before_show(self) -> None:
-        self._tune_hwnd()
+    def _on_page_loaded(self) -> None:
+        self._tune_hwnd(transparency=True, block=True)
 
     def set_owner_native(self, owner: Any) -> None:
         self._owner_native = owner
@@ -74,12 +110,21 @@ class AvatarWindowController:
         if not win.events.shown.wait(60):
             _alog("prime: timeout shown")
             return
+        from .avatar_dev import avatar_dev_enabled, wait_core_webview2
+
+        if not wait_core_webview2(win):
+            _alog("prime: CoreWebView2 timeout, пробуем load_url")
         try:
             win.load_url(self._page_url)
             self._page_loaded = True
-            self._tune_hwnd()
-            threading.Timer(0.35, self._tune_hwnd).start()
+            self._tune_hwnd(transparency=True, block=True)
+            threading.Timer(0.35, lambda: self._tune_hwnd(transparency=True)).start()
+            threading.Timer(0.9, lambda: self._tune_hwnd(transparency=True)).start()
             _alog("prime: страница загружена")
+            if avatar_dev_enabled() and self._win is not None:
+                from .avatar_dev import schedule_avatar_devtools
+
+                schedule_avatar_devtools(self._win, log=_alog)
             if AVATAR_ALWAYS_VISIBLE:
                 threading.Thread(target=self._show_worker, name="ltts-avatar-ui", daemon=True).start()
         except Exception as e:
@@ -97,7 +142,7 @@ class AvatarWindowController:
         target = self._show_worker if on else self._park_worker
         threading.Thread(target=target, name="ltts-avatar-ui", daemon=True).start()
 
-    def _tune_hwnd(self) -> None:
+    def _tune_hwnd(self, *, transparency: bool = True, block: bool = False) -> None:
         import ctypes
 
         win = self._win
@@ -105,14 +150,14 @@ class AvatarWindowController:
 
         def _on_ui() -> None:
             if form is not None:
-                tune_avatar_form(form, self._owner_native)
+                tune_avatar_form(form, self._owner_native, transparency=transparency)
             else:
                 hwnd = ctypes.windll.user32.FindWindowW(None, "ltts-avatar")
                 if hwnd:
                     exclude_from_taskbar(hwnd)
 
         if form is not None:
-            run_on_ui(form, _on_ui, block=False)
+            run_on_ui(form, _on_ui, block=block)
         else:
             _on_ui()
 
@@ -125,15 +170,16 @@ class AvatarWindowController:
             return
         with _ui_lock:
             try:
-                size = self._size
-                h = size
-                x, y = corner_xy(size, h)
-                win.resize(size, h)
-                win.move(x, y)
+                if not self._visible:
+                    size = self._size
+                    h = size
+                    x, y = corner_xy(size, h)
+                    win.resize(size, h)
+                    win.move(x, y)
+                    _alog(f"show: {x},{y}")
                 win.show()
                 self._tune_hwnd()
                 self._visible = True
-                _alog(f"show: {x},{y}")
             except Exception as e:
                 _alog(f"show: {e!r}")
 

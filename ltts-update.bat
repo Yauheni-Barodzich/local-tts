@@ -1,5 +1,5 @@
 @echo off
-REM Установка / обновление ltts из этого клона (uv tool install + extra tray). Голоса: ltts-menu.bat install
+REM Install/update ltts from this clone via uv tool install desktop extra. Voices: ltts-menu.bat install
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 
@@ -23,8 +23,8 @@ if not defined UV (
 echo.
 echo  === Обновление ltts из исходников ===
 echo  %ROOT%
-echo  CLI + desktop (трей/окно). Запуск: ltts-tray.bat
-echo  Закройте ltts serve / MCP / ltts tray в других окнах (Ctrl+C^).
+echo  CLI + desktop (трей/окно). Запуск: ltts-desktop.bat
+echo  Закройте ltts serve / MCP / ltts desktop в других окнах (Ctrl+C^).
 echo.
 
 set "TOOL_SRC=%ROOT%[desktop]"
@@ -75,7 +75,7 @@ for /f "delims=" %%i in ('where ltts.exe 2^>nul') do (
 :version_done
 
 echo.
-echo  Готово. Веб: ltts-web.bat   Трей: ltts-tray.bat
+echo  Готово. Веб: ltts-web.bat   Desktop: ltts-desktop.bat
 goto done_ok
 
 :do_install

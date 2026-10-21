@@ -28,3 +28,12 @@ def default_avatar_image_path() -> Path:
     if p.is_file():
         return p
     return tray_image_path()
+
+
+def load_tray_icon_image():
+    from PIL import Image
+
+    with tray_image_path().open("rb") as f:
+        img = Image.open(f)
+        img.load()
+        return img.convert("RGBA")

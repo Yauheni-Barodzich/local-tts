@@ -1,4 +1,4 @@
-"""Один экземпляр desktop/tray (Windows)."""
+"""Один экземпляр ltts desktop (Windows)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from pathlib import Path
 from .paths import HOME
 
 DESKTOP_PID = HOME / "desktop.pid"
-TRAY_PID = HOME / "tray.pid"
 
 _DESKTOP_CMD = re.compile(r"ltts(\.cli)?\s+desktop|ltts-desktop|entry_desktop", re.I)
 

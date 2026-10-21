@@ -19,9 +19,9 @@ If fso.FileExists(uvPyw) Then
   WScript.Quit 0
 End If
 
-trayBat = root & "\ltts-tray.bat"
-If fso.FileExists(trayBat) Then
-  sh.Run """" & trayBat & """ nopause", 0, False
+desktopBat = root & "\ltts-desktop.bat"
+If fso.FileExists(desktopBat) Then
+  sh.Run """" & desktopBat & """ nopause", 0, False
   WScript.Quit 0
 End If
 

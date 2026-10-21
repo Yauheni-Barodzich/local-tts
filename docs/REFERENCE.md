@@ -21,7 +21,7 @@
 
 ## Windows-приложение и сборка
 
-**Разработка из клона:** `ltts-update.bat` (extra `[desktop]`), затем **`ltts-desktop.vbs`** (без консоли), `ltts-desktop.bat` или `ltts desktop` — иконка в трее, окно на WebView2, сервер внутри процесса. Ярлык: `powershell -File create-desktop-shortcut.ps1`. Иконки: `src/ltts/assets/app.ico` (пересборка: `uv run python scripts/build_app_icon.py`). Первый запуск скачивает **silero:kseniya**; данные в `%LOCALAPPDATA%\ltts`.
+**Разработка из клона:** `ltts-update.bat` (extra `[desktop]`), затем **`ltts-desktop.bat`** / **`ltts-desktop.vbs`** (без консоли) или `ltts desktop` — трей, аватар, WebView2, сервер в одном процессе (legacy `ltts tray` и отдельный serve убраны). **Dev аватара:** только **`ltts-desktop-dev.bat`** (hot-reload `avatar.html`, F12; опц. `LTTS_AVATAR_DEBUG_PORT=9223` → `edge://inspect`). Ярлык: `powershell -File create-desktop-shortcut.ps1`. Иконки: `src/ltts/assets/app.ico` (пересборка: `uv run python scripts/build_app_icon.py`). Первый запуск скачивает **silero:kseniya**; данные в `%LOCALAPPDATA%\ltts`.
 
 **Установщик (PyInstaller + Inno Setup):**
 

@@ -232,12 +232,6 @@ def cmd_lexicon(args) -> int:
     return 0
 
 
-def cmd_tray(args) -> int:
-    from .tray import run_tray
-
-    return run_tray(args.host, args.port)
-
-
 def cmd_desktop(args) -> int:
     from .desktop import run_desktop
 
@@ -381,11 +375,6 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--port", type=int, default=DEFAULT_PORT)
     s.add_argument("--open", action="store_true", help="открыть в браузере")
     s.set_defaults(fn=cmd_serve)
-
-    s = sub.add_parser("tray", help="Windows: иконка в трее (legacy: отдельный ltts serve)")
-    s.add_argument("--host", default=DEFAULT_HOST)
-    s.add_argument("--port", type=int, default=DEFAULT_PORT)
-    s.set_defaults(fn=cmd_tray)
 
     s = sub.add_parser("desktop", help="Windows: приложение (трей + окно, встроенный сервер)")
     s.add_argument("--host", default=DEFAULT_HOST)

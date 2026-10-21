@@ -1,5 +1,5 @@
 @echo off
-REM Веб: браузер + сервер. Desktop (трей+окно): ltts.cmd или ltts-web-desktop.bat / ltts-desktop.bat
+REM Веб в браузере: ltts serve --open. Desktop: ltts-desktop.bat или ltts.cmd без аргументов.
 setlocal EnableExtensions
 chcp 65001 >nul 2>&1
 set "ROOT=%~dp0"

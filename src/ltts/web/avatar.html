@@ -127,15 +127,10 @@ function drawRig(st) {
   }
 }
 
-function tickSingle(st) {
+function tickSingle(_st) {
   const el = $("single");
   if (el.hidden) return;
-  if (!st.playing) {
-    el.style.transform = "";
-    return;
-  }
-  const lift = 1 + Math.min(0.04, st.level * 0.04);
-  el.style.transform = `scale(${lift})`;
+  el.style.transform = "";
 }
 
 function setPollActive(on) {

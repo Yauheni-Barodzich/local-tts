@@ -9,11 +9,6 @@ if exist "%APPDATA%\uv\tools\ltts\Scripts" set "PATH=%APPDATA%\uv\tools\ltts\Scr
 
 if "%~1"=="" goto launch_desktop
 if /i "%~1"=="desktop" if "%~2"=="" goto launch_desktop
-if /i "%~1"=="tray" (
-  shift
-  goto launch_tray
-)
-
 set "_UV=uv"
 where uv >nul 2>&1 || if exist "%USERPROFILE%\.local\bin\uv.exe" set "_UV=%USERPROFILE%\.local\bin\uv.exe"
 if exist "%APPDATA%\uv\tools\ltts\Scripts\ltts.exe" (
@@ -61,13 +56,3 @@ set "EC=!ERRORLEVEL!"
 if not "!EC!"=="0" pause
 exit /b !EC!
 
-:launch_tray
-if not exist "%ROOT%\ltts-tray.bat" (
-  echo [ltts] ltts-tray.bat не найден в %ROOT%
-  pause
-  exit /b 1
-)
-call "%ROOT%\ltts-tray.bat" %*
-set "EC=!ERRORLEVEL!"
-if not "!EC!"=="0" pause
-exit /b !EC!
