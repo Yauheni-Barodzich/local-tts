@@ -165,6 +165,12 @@ def common_js():
     return FileResponse(path, media_type="application/javascript", headers=HTML_NO_CACHE)
 
 
+@app.get("/avatar-chroma.js")
+def avatar_chroma_js():
+    path = _dev_static_file("avatar-chroma.js") or (files("ltts") / "web" / "avatar-chroma.js")
+    return FileResponse(path, media_type="application/javascript", headers=HTML_NO_CACHE)
+
+
 @app.get("/api/dev/web-rev")
 def api_dev_web_rev():
     from .web_dev import web_dev_enabled, web_static_rev

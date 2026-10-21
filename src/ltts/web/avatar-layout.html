@@ -13,8 +13,23 @@
   p.hint { color: #64748B; margin: 0 0 16px; }
   .btn { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; font: inherit; text-decoration: none; color: inherit; display: inline-block; }
   .btn.primary { background: var(--accent); color: #fff; border-color: transparent; }
-  .grid { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
-  @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 520px);
+    gap: 16px;
+    align-items: start;
+  }
+  .controls { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .controls-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .grid { grid-template-columns: 1fr; }
+    .controls-grid { grid-template-columns: 1fr; }
+  }
   .preview-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .preview-box {
     position: relative; overflow: hidden; border-radius: 12px;
@@ -37,40 +52,85 @@
   fieldset { border: none; padding: 0; margin: 8px 0 0; }
   fieldset label { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; color: var(--text); }
   html.embed .page-chrome { display: none; }
-  html.embed .wrap { max-width: none; padding: 16px 16px 20px; }
+  html.embed, html.embed body { overflow: hidden; }
+  html.embed .wrap { max-width: none; padding: 10px 12px 12px; }
+  html.embed .hint.embed-only { margin: 0 0 8px; font-size: 12px; }
+  html.embed .grid { grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
+  html.embed .controls-grid { gap: 8px; }
+  html.embed .panel { padding: 10px 12px; }
+  html.embed .panel label { margin: 6px 0 2px; font-size: 12px; }
+  html.embed .chroma-block .hint { font-size: 11px; line-height: 1.35; }
+  html.embed .row { margin-top: 0; }
+  html.embed .preview-wrap {
+    align-self: start;
+    max-width: min(240px, 36vw);
+  }
   html.embed .preview-box {
     border: none; border-radius: 0; box-shadow: none;
+    max-width: 100%;
+    max-height: min(50vh, 280px);
   }
+  #size-label.scaled { font-size: 12px; }
+  .chroma-block { margin: 0; padding: 0; border: none; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text); margin: 0 0 6px; }
+  .chroma-block .section-title { margin: 0 0 6px; }
+  .chroma-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  .chroma-swatch { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--border); flex-shrink: 0; }
+  #chroma-hex { width: 5.5rem; font: 12px ui-monospace, monospace; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; }
+  #chroma-color { width: 36px; height: 28px; padding: 0; border: none; background: none; cursor: pointer; }
+  .btn.active { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .preview-box.pipette-active canvas { cursor: crosshair; }
+  .preview-box canvas { cursor: grab; touch-action: none; }
+  .preview-box.dragging canvas { cursor: grabbing; }
 </style>
+<script src="/avatar-chroma.js"></script>
 </head>
 <body>
 <div class="wrap">
   <div class="page-chrome">
     <a href="/settings#avatar" class="btn">← Настройки</a>
     <h1>Кадр персонажа</h1>
-    <p class="hint">Подгонка под размер окна аватара у трея. Шашечки — «пустое» место; уберите белые поля режимом «Заполнить» и масштабом.</p>
+    <p class="hint">Подгонка под размер окна аватара у трея. Перетащите персонажа на превью для сдвига. Шашечки — прозрачные области.</p>
   </div>
-  <p class="hint embed-only" hidden>Подгонка под окно у трея. Шашечки — прозрачные области.</p>
+  <p class="hint embed-only" hidden>Перетащите персонажа на превью для сдвига. Шашечки — прозрачные области.</p>
   <div class="grid">
     <div class="preview-wrap">
       <div class="preview-box" id="box"><canvas id="cv"></canvas></div>
       <span class="hint" id="size-label">160 × 160 px</span>
     </div>
-    <div class="panel">
-      <label>Размер окна <span class="val" id="v-size"></span></label>
-      <input type="range" id="win-size" min="80" max="400" step="10" value="160">
-      <fieldset>
-        <legend class="hint" style="margin:0;padding:0">Вписывание</legend>
-        <label><input type="radio" name="fit" value="cover" checked> Заполнить</label>
-        <label><input type="radio" name="fit" value="contain"> Вместить</label>
-      </fieldset>
-      <label>Масштаб <span class="val" id="v-scale">1.00</span></label>
-      <input type="range" id="scale" min="0.25" max="2.5" step="0.01" value="1">
-      <label>Сдвиг X <span class="val" id="v-x">0</span></label>
-      <input type="range" id="off-x" min="-120" max="120" step="1" value="0">
-      <label>Сдвиг Y <span class="val" id="v-y">0</span></label>
-      <input type="range" id="off-y" min="-120" max="120" step="1" value="0">
-      <div class="row">
+    <div class="controls">
+      <div class="controls-grid">
+        <div class="panel panel-geom">
+          <p class="section-title">Кадр</p>
+          <label>Размер окна <span class="val" id="v-size"></span></label>
+          <input type="range" id="win-size" min="80" max="400" step="10" value="160">
+          <fieldset>
+            <legend class="hint" style="margin:0;padding:0">Вписывание</legend>
+            <label><input type="radio" name="fit" value="cover" checked> Заполнить</label>
+            <label><input type="radio" name="fit" value="contain"> Вместить</label>
+          </fieldset>
+          <label>Масштаб <span class="val" id="v-scale">1.00</span></label>
+          <input type="range" id="scale" min="0.25" max="2.5" step="0.01" value="1">
+          <label>Сдвиг X <span class="val" id="v-x">0</span></label>
+          <input type="range" id="off-x" min="-120" max="120" step="1" value="0">
+          <label>Сдвиг Y <span class="val" id="v-y">0</span></label>
+          <input type="range" id="off-y" min="-120" max="120" step="1" value="0">
+        </div>
+        <div class="panel panel-chroma chroma-block" id="chroma-controls">
+          <p class="section-title">Обрезка по цвету</p>
+          <label><input type="checkbox" id="chroma-enabled"> Хромакей</label>
+          <p class="hint" style="margin:4px 0 0;font-size:12px">Пипетка — клик по фону на превью.</p>
+          <div class="chroma-row">
+            <button type="button" class="btn" id="chroma-pick">Пипетка</button>
+            <span class="chroma-swatch" id="chroma-swatch" title="Цвет ключа"></span>
+            <input type="color" id="chroma-color" value="#010102" disabled>
+            <input type="text" id="chroma-hex" value="#010102" readonly disabled>
+          </div>
+          <label>Допуск <span class="val" id="v-chroma-tol">16</span></label>
+          <input type="range" id="chroma-tol" min="0" max="64" step="1" value="16" disabled>
+        </div>
+      </div>
+      <div class="row panel-actions">
         <button class="btn primary" id="save" type="button">Сохранить</button>
         <button class="btn" id="reset" type="button">Сброс</button>
       </div>
@@ -85,6 +145,14 @@ if (embed) {
   document.documentElement.classList.add("embed");
   const eo = document.querySelector(".embed-only");
   if (eo) eo.hidden = false;
+  function reportEmbedHeight() {
+    try {
+      const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+      window.parent.postMessage({ type: "ltts-avatar-layout-height", height: h }, location.origin);
+    } catch (_) {}
+  }
+  reportEmbedHeight();
+  new ResizeObserver(() => reportEmbedHeight()).observe(document.documentElement);
 }
 const $ = (id) => document.getElementById(id);
 const cv = $("cv");
@@ -93,15 +161,45 @@ let cfg = {};
 let img = null;
 let manifest = null;
 let baseImg = null;
+let pickActive = false;
+let dragPan = null;
+
+function clampOffset(v) {
+  return Math.max(-120, Math.min(120, Math.round(v)));
+}
 
 function layoutFromUi() {
   const fit = document.querySelector('input[name="fit"]:checked')?.value || "cover";
+  const AC = window.AvatarChroma;
+  const hex = AC.normalizeHex($("chroma-color").value || $("chroma-hex").value);
   return {
     fit,
     scale: parseFloat($("scale").value) || 1,
     offset_x: parseInt($("off-x").value, 10) || 0,
     offset_y: parseInt($("off-y").value, 10) || 0,
+    chroma_enabled: $("chroma-enabled").checked,
+    chroma_color: hex,
+    chroma_tolerance: parseInt($("chroma-tol").value, 10) || 0,
   };
+}
+
+function syncChromaUiState() {
+  const on = $("chroma-enabled").checked;
+  $("chroma-pick").disabled = !on;
+  $("chroma-color").disabled = !on;
+  $("chroma-tol").disabled = !on;
+  if (!on) {
+    pickActive = false;
+    $("box").classList.remove("pipette-active");
+    $("chroma-pick").classList.remove("active");
+  }
+}
+
+function setChromaColor(hex) {
+  const h = window.AvatarChroma.normalizeHex(hex);
+  $("chroma-color").value = h;
+  $("chroma-hex").value = h;
+  $("chroma-swatch").style.background = h;
 }
 
 function fitScale(w, h, iw, ih, fit) {
@@ -109,13 +207,39 @@ function fitScale(w, h, iw, ih, fit) {
   return fit === "cover" ? Math.max(w / iw, h / ih) : Math.min(w / iw, h / ih);
 }
 
+function previewViewPixels(logicalSize) {
+  let cap = logicalSize;
+  const controls = document.querySelector(".controls-grid");
+  if (controls) {
+    const ch = controls.getBoundingClientRect().height;
+    if (ch > 0) cap = Math.min(cap, ch);
+  }
+  const vh = window.innerHeight || 600;
+  const vw = window.innerWidth || 800;
+  const viewportCap = embed
+    ? Math.min(vh * 0.52, vw * 0.34, 280)
+    : Math.min(vh * 0.7, vw * 0.42, 360);
+  cap = Math.min(cap, viewportCap);
+  return Math.max(80, Math.floor(cap));
+}
+
 function drawPreview() {
   const size = parseInt($("win-size").value, 10) || 160;
-  $("box").style.width = size + "px";
-  $("box").style.height = size + "px";
+  const viewPx = previewViewPixels(size);
+  $("box").style.width = viewPx + "px";
+  $("box").style.height = viewPx + "px";
   cv.width = size;
   cv.height = size;
-  $("size-label").textContent = size + " × " + size + " px";
+  cv.style.width = "100%";
+  cv.style.height = "100%";
+  const label = $("size-label");
+  if (viewPx < size) {
+    label.textContent = `${size} × ${size} px (превью ${viewPx}px)`;
+    label.classList.add("scaled");
+  } else {
+    label.textContent = size + " × " + size + " px";
+    label.classList.remove("scaled");
+  }
   $("v-size").textContent = size + " px";
   g.clearRect(0, 0, size, size);
   const source = baseImg || img;
@@ -133,12 +257,14 @@ function drawPreview() {
   const ox = (size - bw) / 2 + L.offset_x;
   const oy = size - bh + L.offset_y;
   g.drawImage(source, ox, oy, bw, bh);
+  window.AvatarChroma.chromaKeyLayoutRect(g, 0, 0, size, size, L);
 }
 
 function syncLabels() {
   $("v-scale").textContent = (parseFloat($("scale").value) || 1).toFixed(2);
   $("v-x").textContent = $("off-x").value;
   $("v-y").textContent = $("off-y").value;
+  $("v-chroma-tol").textContent = $("chroma-tol").value;
 }
 
 function applyLayoutToUi(L) {
@@ -149,6 +275,10 @@ function applyLayoutToUi(L) {
   document.querySelectorAll('input[name="fit"]').forEach((el) => {
     el.checked = el.value === fit;
   });
+  $("chroma-enabled").checked = !!L.chroma_enabled;
+  setChromaColor(L.chroma_color || window.AvatarChroma.DEFAULT_PAGE);
+  $("chroma-tol").value = L.chroma_tolerance ?? 16;
+  syncChromaUiState();
   syncLabels();
 }
 
@@ -188,9 +318,85 @@ function onChange() {
   $(id).addEventListener("input", onChange);
 });
 document.querySelectorAll('input[name="fit"]').forEach((el) => el.addEventListener("change", onChange));
+$("chroma-enabled").addEventListener("change", () => { syncChromaUiState(); onChange(); });
+$("chroma-color").addEventListener("input", () => { setChromaColor($("chroma-color").value); onChange(); });
+$("chroma-tol").addEventListener("input", onChange);
+$("chroma-pick").addEventListener("click", () => {
+  if (!$("chroma-enabled").checked) return;
+  pickActive = !pickActive;
+  $("box").classList.toggle("pipette-active", pickActive);
+  $("chroma-pick").classList.toggle("active", pickActive);
+});
+function samplePipette(clientX, clientY) {
+  const rect = cv.getBoundingClientRect();
+  const x = Math.floor((clientX - rect.left) * (cv.width / rect.width));
+  const y = Math.floor((clientY - rect.top) * (cv.height / rect.height));
+  const p = g.getImageData(x, y, 1, 1).data;
+  const hex = "#" + [p[0], p[1], p[2]].map((v) => v.toString(16).padStart(2, "0")).join("");
+  setChromaColor(hex);
+  $("chroma-enabled").checked = true;
+  syncChromaUiState();
+  pickActive = false;
+  $("box").classList.remove("pipette-active");
+  $("chroma-pick").classList.remove("active");
+  onChange();
+}
+
+cv.addEventListener("pointerdown", (e) => {
+  if (pickActive) {
+    dragPan = { pipette: true, x: e.clientX, y: e.clientY, moved: false };
+    cv.setPointerCapture(e.pointerId);
+    return;
+  }
+  if (!baseImg && !img) return;
+  dragPan = {
+    pipette: false,
+    x: e.clientX,
+    y: e.clientY,
+    offX: parseInt($("off-x").value, 10) || 0,
+    offY: parseInt($("off-y").value, 10) || 0,
+    moved: false,
+  };
+  $("box").classList.add("dragging");
+  cv.setPointerCapture(e.pointerId);
+});
+
+cv.addEventListener("pointermove", (e) => {
+  if (!dragPan) return;
+  const dx = e.clientX - dragPan.x;
+  const dy = e.clientY - dragPan.y;
+  if (Math.abs(dx) + Math.abs(dy) > 2) dragPan.moved = true;
+  if (dragPan.pipette) return;
+  $("off-x").value = clampOffset(dragPan.offX + dx);
+  $("off-y").value = clampOffset(dragPan.offY + dy);
+  onChange();
+});
+
+function endPointerDrag(e) {
+  if (!dragPan) return;
+  if (dragPan.pipette && pickActive && !dragPan.moved) {
+    samplePipette(e.clientX, e.clientY);
+  }
+  dragPan = null;
+  $("box").classList.remove("dragging");
+  try {
+    cv.releasePointerCapture(e.pointerId);
+  } catch (_) {}
+}
+
+cv.addEventListener("pointerup", endPointerDrag);
+cv.addEventListener("pointercancel", endPointerDrag);
 
 $("reset").onclick = () => {
-  applyLayoutToUi({ fit: "cover", scale: 1, offset_x: 0, offset_y: 0 });
+  applyLayoutToUi({
+    fit: "cover",
+    scale: 1,
+    offset_x: 0,
+    offset_y: 0,
+    chroma_enabled: false,
+    chroma_color: window.AvatarChroma.DEFAULT_PAGE,
+    chroma_tolerance: 16,
+  });
   drawPreview();
 };
 
@@ -226,6 +432,9 @@ loadCharacter().catch((e) => {
   $("err").textContent = "Не удалось загрузить персонажа: " + e;
   $("err").hidden = false;
 });
+
+window.addEventListener("resize", () => drawPreview());
+requestAnimationFrame(() => requestAnimationFrame(() => drawPreview()));
 </script>
 </body>
 </html>

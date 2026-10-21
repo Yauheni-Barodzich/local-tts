@@ -47,6 +47,7 @@ packages = ["src/ltts"]
 "src/ltts/web/setup.html" = "ltts/web/setup.html"
 "src/ltts/web/settings.html" = "ltts/web/settings.html"
 "src/ltts/web/common.js" = "ltts/web/common.js"
+"src/ltts/web/avatar-chroma.js" = "ltts/web/avatar-chroma.js"
 "src/ltts/web/avatar.html" = "ltts/web/avatar.html"
 "src/ltts/web/avatar-rig.html" = "ltts/web/avatar-rig.html"
 "src/ltts/web/avatar-layout.html" = "ltts/web/avatar-layout.html"

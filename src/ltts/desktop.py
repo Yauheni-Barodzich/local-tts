@@ -311,11 +311,12 @@ def run_desktop(
 
             if avatar_dev_on:
                 prepare_pywebview_dev(log=_log)
-            from .avatar_win32 import CHROMA_HEX
+            from .avatar_config import effective_page_chroma_hex
             from .avatar_webview_patch import apply_avatar_webview_patches
 
             apply_avatar_webview_patches()
             cfg = avatar_config()
+            page_chroma = effective_page_chroma_hex(cfg.get("layout"))
             av_size = int(cfg.get("size", 160))
             av_h = av_size
             if AVATAR_ALWAYS_VISIBLE:
@@ -325,9 +326,9 @@ def run_desktop(
             avatar_window = webview.create_window(
                 "ltts-avatar",
                 html=(
-                    f"<!DOCTYPE html><html style='background:{CHROMA_HEX}'>"
+                    f"<!DOCTYPE html><html style='background:{page_chroma}'>"
                     f"<head><meta charset='utf-8'></head>"
-                    f"<body style='margin:0;background:{CHROMA_HEX}'></body></html>"
+                    f"<body style='margin:0;background:{page_chroma}'></body></html>"
                 ),
                 width=av_size,
                 height=av_h,
@@ -336,7 +337,7 @@ def run_desktop(
                 hidden=not AVATAR_ALWAYS_VISIBLE,
                 frameless=True,
                 transparent=False,
-                background_color=CHROMA_HEX,
+                background_color=page_chroma,
                 on_top=True,
                 easy_drag=True,
                 focus=False,

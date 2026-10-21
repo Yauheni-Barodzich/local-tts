@@ -96,6 +96,8 @@
   .avatar-preview-side { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
   .avatar-preview-viewport {
     line-height: 0;
+    overflow: hidden;
+    border-radius: 8px;
     background: repeating-conic-gradient(#cbd5e1 0% 25%, #f1f5f9 0% 50%) 50% / 14px 14px;
   }
   :root[data-theme="dark"] .avatar-preview-viewport {
@@ -114,7 +116,7 @@
   .avatar-preview-caption { font-size: 12px; color: var(--faint); max-width: 220px; line-height: 1.4; }
   .layout-dialog {
     border: none; padding: 0; margin: auto;
-    width: min(96vw, 920px); max-height: 90vh;
+    width: min(98vw, 880px); max-height: 96vh;
     background: var(--surface); color: var(--text);
     border-radius: var(--r);
     box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
@@ -126,8 +128,8 @@
   }
   .layout-dialog-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
   .layout-dialog iframe {
-    display: block; width: 100%; height: min(78vh, 480px); border: none;
-    background: var(--bg);
+    display: block; width: 100%; height: 340px; min-height: 300px; max-height: 92vh; border: none;
+    background: var(--bg); overflow: hidden;
   }
 </style>
 </head>
@@ -419,6 +421,13 @@ $("avatar-layout-close")?.addEventListener("click", closeAvatarLayoutDialog);
 
 window.addEventListener("message", (ev) => {
   if (ev.origin !== location.origin) return;
+  if (ev.data?.type === "ltts-avatar-layout-height") {
+    const frame = $("avatar-layout-frame");
+    if (frame && ev.data.height > 0) {
+      frame.style.height = Math.min(ev.data.height + 2, Math.round(window.innerHeight * 0.92)) + "px";
+    }
+    return;
+  }
   if (ev.data?.type !== "ltts-avatar-layout-saved") return;
   toast("Кадр сохранён");
   avatarPreviewStale = true;
@@ -428,6 +437,10 @@ window.addEventListener("message", (ev) => {
       avatarPreviewStale = false;
     })
     .catch(() => {});
+});
+
+$("avatar-layout-dialog")?.addEventListener("close", () => {
+  if (avatarPreviewStale) reloadAvatarPreview();
 });
 
 $("avatar-upload").onclick = async () => {

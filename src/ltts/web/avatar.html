@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>ltts avatar</title>
+<script src="/avatar-chroma.js"></script>
 <style>
   html, body {
     margin: 0; padding: 0; overflow: hidden;
@@ -15,6 +16,20 @@
     background: transparent !important;
     background-color: transparent !important;
     cursor: default;
+  }
+  #preview-grid {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: repeating-conic-gradient(#cbd5e1 0% 25%, #f1f5f9 0% 50%) 50% / 14px 14px;
+  }
+  html.preview #preview-grid { display: block; }
+  @media (prefers-color-scheme: dark) {
+    html.preview #preview-grid {
+      background: repeating-conic-gradient(#334155 0% 25%, #1e293b 0% 50%) 50% / 14px 14px;
+    }
   }
   html, body, #stage {
     position: fixed;
@@ -54,12 +69,21 @@
     object-position: bottom center;
     transform-origin: center bottom;
   }
+  #single-cv {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+  }
 </style>
 </head>
 <body>
+<div id="preview-grid" aria-hidden="true"></div>
 <div id="dragpad" class="pywebview-drag-region" aria-hidden="true"></div>
 <div id="stage">
   <img id="single" alt="" hidden>
+  <canvas id="single-cv" hidden></canvas>
   <div id="rig" hidden><canvas id="cv"></canvas></div>
 </div>
 <script>
@@ -69,15 +93,37 @@ let cfg = { mode: "bundled" };
 let manifest = null;
 let mouthImgs = {};
 let baseImg = null;
+let singleImg = null;
 let blink = false;
 let blinkT = 0;
-let poll = null;
+let statusPoll = null;
+let animPoll = null;
 let playing = false;
 let configLoaded = false;
 let alwaysOn = false;
 
+const _qs = new URLSearchParams(location.search);
+const previewMode = _qs.has("preview") || _qs.get("preview") === "1";
+if (previewMode) {
+  document.documentElement.classList.add("preview");
+  $("dragpad").style.display = "none";
+}
+
+function chromaLayout() {
+  return window.AvatarChroma.parseChromaLayout(cfg.layout || {});
+}
+
+function applyPageChroma() {
+  window.AvatarChroma.applyPageBackground(cfg.layout || {}, previewMode);
+}
+
+function useChromaCanvas() {
+  return chromaLayout().enabled;
+}
+
 async function loadConfig() {
   cfg = await fetch("/api/avatar/config").then((r) => r.json());
+  applyPageChroma();
   if (cfg.mode === "rig" && cfg.rig_url) {
     manifest = await fetch(cfg.rig_url).then((r) => r.json());
     baseImg = await loadImg(manifest.base);
@@ -86,19 +132,43 @@ async function loadConfig() {
       mouthImgs[k] = await loadImg(url);
     }
     $("single").hidden = true;
+    $("single-cv").hidden = true;
     $("rig").hidden = false;
+    singleImg = null;
   } else {
+    manifest = null;
+    baseImg = null;
     const url = (
       cfg.mode === "bundled" ? cfg.bundled_url : (cfg.image_url || cfg.bundled_url)
     ) + "?t=" + Date.now();
-    const el = $("single");
-    el.onerror = showBundledFallback;
-    el.src = url;
-    el.hidden = false;
+    try {
+      singleImg = await loadImg(url);
+    } catch (_) {
+      await showBundledFallback();
+      configLoaded = true;
+      return;
+    }
     $("rig").hidden = true;
+    syncSingleView();
   }
-  applySingleLayout();
   configLoaded = true;
+  if (manifest) drawRig({ playing: false, level: 0, viseme: "closed" });
+  else drawSingle();
+}
+
+function syncSingleView() {
+  if (useChromaCanvas()) {
+    $("single").hidden = true;
+    $("single-cv").hidden = false;
+    drawSingle();
+  } else {
+    $("single-cv").hidden = true;
+    const el = $("single");
+    el.onerror = () => { showBundledFallback().catch(() => {}); };
+    if (singleImg) el.src = singleImg.src;
+    el.hidden = false;
+    applySingleLayout();
+  }
 }
 
 function layoutCfg() {
@@ -116,6 +186,16 @@ function fitScale(w, h, iw, ih, fit) {
   return fit === "cover" ? Math.max(w / iw, h / ih) : Math.min(w / iw, h / ih);
 }
 
+function layoutDrawRect(w, h, source) {
+  const L = layoutCfg();
+  const scale = fitScale(w, h, source.width, source.height, L.fit) * L.scale;
+  const bw = source.width * scale;
+  const bh = source.height * scale;
+  const ox = (w - bw) / 2 + L.offset_x;
+  const oy = h - bh + L.offset_y;
+  return { ox, oy, bw, bh };
+}
+
 function applySingleLayout() {
   const el = $("single");
   if (el.hidden) return;
@@ -126,13 +206,55 @@ function applySingleLayout() {
   el.style.transform = `translate(${L.offset_x}px, ${L.offset_y}px) scale(${L.scale})`;
 }
 
+function drawSingle() {
+  if (manifest || !singleImg) return;
+  if (!chromaLayout().enabled) {
+    $("single-cv").hidden = true;
+    const el = $("single");
+    el.onerror = () => { showBundledFallback().catch(() => {}); };
+    el.src = singleImg.src;
+    el.hidden = false;
+    applySingleLayout();
+    return;
+  }
+  $("single").hidden = true;
+  $("single-cv").hidden = false;
+  const w = stage.clientWidth || 160;
+  const h = stage.clientHeight || 160;
+  const cv = $("single-cv");
+  cv.width = w;
+  cv.height = h;
+  const g = cv.getContext("2d", { alpha: true });
+  g.clearRect(0, 0, w, h);
+  const { ox, oy, bw, bh } = layoutDrawRect(w, h, singleImg);
+  g.drawImage(singleImg, ox, oy, bw, bh);
+  try {
+    window.AvatarChroma.chromaKeyLayoutRect(g, 0, 0, w, h, cfg.layout || {});
+  } catch (e) {
+    console.warn("avatar chroma:", e);
+  }
+}
+
 function loadImg(url) {
   return new Promise((res, rej) => {
     const i = new Image();
+    const abs = new URL(url, location.href);
+    if (abs.origin !== location.origin) i.crossOrigin = "anonymous";
     i.onload = () => res(i);
     i.onerror = rej;
     i.src = url;
   });
+}
+
+function chromaKeyBaseRegion(g, w, h, ox, oy, bw, bh) {
+  if (!chromaLayout().enabled) return;
+  const x0 = Math.max(0, Math.floor(ox));
+  const y0 = Math.max(0, Math.floor(oy));
+  const x1 = Math.min(w, Math.ceil(ox + bw));
+  const y1 = Math.min(h, Math.ceil(oy + bh));
+  if (x1 > x0 && y1 > y0) {
+    window.AvatarChroma.chromaKeyLayoutRect(g, x0, y0, x1 - x0, y1 - y0, cfg.layout || {});
+  }
 }
 
 function drawRig(st) {
@@ -145,13 +267,9 @@ function drawRig(st) {
   const g = cv.getContext("2d", { alpha: true });
   g.clearRect(0, 0, w, h);
   if (!baseImg) return;
-  const L = layoutCfg();
-  const scale = fitScale(w, h, baseImg.width, baseImg.height, L.fit) * L.scale;
-  const bw = baseImg.width * scale;
-  const bh = baseImg.height * scale;
-  const ox = (w - bw) / 2 + L.offset_x;
-  const oy = h - bh + L.offset_y;
+  const { ox, oy, bw, bh } = layoutDrawRect(w, h, baseImg);
   g.drawImage(baseImg, ox, oy, bw, bh);
+  chromaKeyBaseRegion(g, w, h, ox, oy, bw, bh);
   if (!st.playing) return;
   const mouth = manifest?.mouth || { x: 0.35, y: 0.55, w: 0.3, h: 0.12 };
   let vis = st.viseme || "closed";
@@ -174,35 +292,25 @@ function drawRig(st) {
   }
 }
 
-function tickSingle(_st) {
-  applySingleLayout();
-}
-
-function setPollActive(on) {
-  if (on && !poll) {
-    poll = setInterval(pollPlayback, 50);
-  } else if (!on && poll) {
-    clearInterval(poll);
-    poll = null;
+function setAnimPoll(on) {
+  if (on && !animPoll) {
+    animPoll = setInterval(pollAnimFrame, 50);
+  } else if (!on && animPoll) {
+    clearInterval(animPoll);
+    animPoll = null;
   }
 }
 
-async function pollPlayback() {
+async function pollAnimFrame() {
+  if (!playing || !manifest) return;
   try {
     const st = await fetch("/api/avatar/playback").then((r) => r.json());
-    const was = playing;
     playing = !!st.playing;
-    stage.classList.toggle("live", alwaysOn || playing);
-    if (playing && !was && !configLoaded) await loadConfig();
-    setPollActive(playing);
     if (!playing) {
-      if (alwaysOn && configLoaded && manifest) {
-        drawRig({ playing: false, level: 0, viseme: "closed" });
-      }
+      setAnimPoll(false);
       return;
     }
-    if (manifest) drawRig(st);
-    else tickSingle(st);
+    drawRig(st);
     const now = performance.now();
     if (now - blinkT > 2800 + Math.random() * 2000) {
       blink = true;
@@ -212,28 +320,49 @@ async function pollPlayback() {
   } catch (_) {}
 }
 
-const _qs = new URLSearchParams(location.search);
-const previewMode = _qs.has("preview") || _qs.get("preview") === "1";
-if (previewMode) {
-  document.documentElement.classList.add("preview");
-  $("dragpad").style.display = "none";
-  $("single").style.filter = "none";
+async function pollPlayback() {
+  try {
+    const st = await fetch("/api/avatar/playback").then((r) => r.json());
+    const was = playing;
+    playing = !!st.playing;
+    stage.classList.toggle("live", alwaysOn || playing);
+    if (playing && !was && !configLoaded) await loadConfig();
+    setAnimPoll(playing);
+    if (playing && !was && manifest) drawRig(st);
+  } catch (_) {}
 }
-function showBundledFallback() {
-  const el = $("single");
-  el.src = "/assets/avatar-default.png?t=" + Date.now();
-  el.hidden = false;
+
+async function showBundledFallback() {
+  singleImg = await loadImg("/assets/avatar-default.png?t=" + Date.now());
+  manifest = null;
+  baseImg = null;
   $("rig").hidden = true;
+  applyPageChroma();
+  syncSingleView();
   stage.classList.add("live");
 }
+
 alwaysOn = _qs.has("always") || _qs.get("always") === "1";
 if (alwaysOn) {
   stage.classList.add("live");
-  loadConfig().catch(showBundledFallback);
+  loadConfig().catch(() => showBundledFallback());
 }
 
-poll = setInterval(pollPlayback, 250);
-window.addEventListener("beforeunload", () => { if (poll) clearInterval(poll); });
+function redrawAvatarFrame() {
+  if (!configLoaded) return;
+  if (manifest) drawRig({ playing: false, level: 0, viseme: "closed" });
+  else drawSingle();
+}
+
+if (previewMode || alwaysOn) {
+  window.addEventListener("resize", () => redrawAvatarFrame());
+}
+
+statusPoll = setInterval(pollPlayback, 250);
+window.addEventListener("beforeunload", () => {
+  if (statusPoll) clearInterval(statusPoll);
+  if (animPoll) clearInterval(animPoll);
+});
 </script>
 </body>
 </html>

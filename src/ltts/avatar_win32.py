@@ -80,20 +80,23 @@ _user32.SetWindowLongPtrW.restype = ctypes.c_void_p
 _form_hwnds: set[int] = set()
 _old_wndproc: dict[int, int] = {}
 
-_PAGE_BG_SCRIPT = (
-    "(function(){"
-    "var c='"
-    + CHROMA_HEX
-    + "';"
-    "function apply(){"
-    "var el=document.documentElement;"
-    "if(el) el.style.backgroundColor=c;"
-    "if(document.body) document.body.style.backgroundColor=c;"
-    "}"
-    "if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',apply);"
-    "else apply();"
-    "})();"
-)
+def _page_bg_script(hex_color: str) -> str:
+    return (
+        "(function(){"
+        "var c='"
+        + hex_color
+        + "';"
+        "function apply(){"
+        "var el=document.documentElement;"
+        "if(el) el.style.backgroundColor=c;"
+        "if(document.body) document.body.style.backgroundColor=c;"
+        "var d=document.getElementById('dragpad');"
+        "if(d) d.style.backgroundColor=c;"
+        "}"
+        "if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',apply);"
+        "else apply();"
+        "})();"
+    )
 
 _chroma_script_added: set[int] = set()
 _enum_refs: list[Any] = []
@@ -114,10 +117,16 @@ def _hwnd_id(hwnd: int) -> int:
     return int(hwnd) & 0xFFFFFFFFFFFFFFFF
 
 
+def _effective_page_rgb() -> tuple[int, int, int]:
+    from .avatar_config import effective_page_chroma_hex, parse_chroma_rgb
+
+    return parse_chroma_rgb(effective_page_chroma_hex())
+
+
 def _chroma_color_opaque():
     from System.Drawing import Color
 
-    r, g, b = CHROMA_RGB
+    r, g, b = _effective_page_rgb()
     return Color.FromArgb(255, r, g, b)
 
 
@@ -222,7 +231,6 @@ _user32.SetWindowRgn.restype = ctypes.c_int
 
 _PW_RENDERFULLCONTENT = 2
 _RGN_OR = 2
-_CHROMA_TOLERANCE = 16
 
 
 class _RECT(ctypes.Structure):
@@ -250,9 +258,21 @@ class _BITMAPINFOHEADER(ctypes.Structure):
     ]
 
 
+def _matches_rgb(b: int, g: int, r: int, rgb: tuple[int, int, int], tol: int) -> bool:
+    cr, cg, cb = rgb
+    return abs(r - cr) <= tol and abs(g - cg) <= tol and abs(b - cb) <= tol
+
+
 def _is_chroma(b: int, g: int, r: int) -> bool:
-    cr, cg, cb = CHROMA_RGB
-    return abs(r - cr) <= _CHROMA_TOLERANCE and abs(g - cg) <= _CHROMA_TOLERANCE and abs(b - cb) <= _CHROMA_TOLERANCE
+    from .avatar_config import chroma_from_layout
+
+    key = chroma_from_layout()
+    tol = int(key["tolerance"])
+    if _matches_rgb(b, g, r, key["rgb"], tol):
+        return True
+    if key["enabled"]:
+        return _matches_rgb(b, g, r, key["key_rgb"], tol)
+    return False
 
 
 def _capture_client(hwnd: int) -> tuple[int, int, bytes] | None:
@@ -425,7 +445,7 @@ def set_webview2_chroma_background(wv: Any) -> None:
         try:
             from Microsoft.Web.WebView2.Core import CoreWebView2Color
 
-            r, g, b = CHROMA_RGB
+            r, g, b = _effective_page_rgb()
             c = CoreWebView2Color()
             c.A = 255
             c.R = r
@@ -443,18 +463,21 @@ def set_webview2_chroma_background(wv: Any) -> None:
 
 
 def inject_page_chroma_background(wv: Any) -> None:
+    from .avatar_config import effective_page_chroma_hex
+
     core = getattr(wv, "CoreWebView2", None)
     if core is None:
         return
+    script = _page_bg_script(effective_page_chroma_hex())
     wid = id(core)
     if wid not in _chroma_script_added:
         try:
-            core.AddScriptToExecuteOnDocumentCreatedAsync(_PAGE_BG_SCRIPT)
+            core.AddScriptToExecuteOnDocumentCreatedAsync(script)
             _chroma_script_added.add(wid)
         except Exception as e:
             _LOG.debug("AddScriptToExecuteOnDocumentCreated: %s", e)
     try:
-        core.ExecuteScriptAsync(_PAGE_BG_SCRIPT)
+        core.ExecuteScriptAsync(script)
     except Exception as e:
         _LOG.debug("ExecuteScript chroma bg: %s", e)
 
@@ -468,7 +491,7 @@ def _schedule_avatar_retune(form: Any) -> None:
     from System import Action
 
     def _kick() -> None:
-        for _ in range(8):
+        for _ in range(4):
             threading.Event().wait(0.35)
             try:
                 form.BeginInvoke(Action(lambda: tune_avatar_form(form)))
@@ -496,6 +519,8 @@ def tune_avatar_form(form: Any, owner: Any = None, *, transparency: bool = True)
             inject_page_chroma_background(wv)
         enable_native_drag(form)
         try:
+            if hasattr(form, "_ltts_shape"):
+                del form._ltts_shape
             refresh_avatar_shape(form)
         except Exception as e:
             _LOG.warning("avatar shape: %s", e)
