@@ -325,7 +325,6 @@ def run_desktop(
                 hidden=not AVATAR_ALWAYS_VISIBLE,
                 frameless=True,
                 transparent=True,
-                background_color="#FFFFFF",
                 on_top=True,
                 easy_drag=True,
                 focus=False,

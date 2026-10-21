@@ -113,14 +113,27 @@ def _audio_response(text: str, voice, speed: float, fmt: str, lang=None, rate=No
 
 
 def _html_page(name: str) -> HTMLResponse:
+    body = None
     if name == "avatar.html":
         from .avatar_dev import dev_avatar_html_body
 
         body = dev_avatar_html_body()
-        if body is not None:
-            return HTMLResponse(body, headers=HTML_NO_CACHE)
-    body = (files("ltts") / "web" / name).read_text(encoding="utf-8")
+    if body is None:
+        from .web_dev import read_dev_html
+
+        body = read_dev_html(name)
+    if body is None:
+        body = (files("ltts") / "web" / name).read_text(encoding="utf-8")
+    from .web_dev import inject_live_reload
+
+    body = inject_live_reload(body)
     return HTMLResponse(body, headers=HTML_NO_CACHE)
+
+
+def _dev_static_file(name: str) -> Path | None:
+    from .web_dev import read_dev_static
+
+    return read_dev_static(name)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -130,26 +143,35 @@ def index():
 
 @app.get("/favicon.ico")
 def favicon_ico():
-    path = files("ltts") / "web" / "favicon.ico"
-    return FileResponse(path, media_type="image/x-icon")
+    path = _dev_static_file("favicon.ico") or (files("ltts") / "web" / "favicon.ico")
+    return FileResponse(path, media_type="image/x-icon", headers=HTML_NO_CACHE)
 
 
 @app.get("/favicon.svg")
 def favicon_svg():
-    path = files("ltts") / "web" / "favicon.svg"
-    return FileResponse(path, media_type="image/svg+xml")
+    path = _dev_static_file("favicon.svg") or (files("ltts") / "web" / "favicon.svg")
+    return FileResponse(path, media_type="image/svg+xml", headers=HTML_NO_CACHE)
 
 
 @app.get("/favicon.png")
 def favicon_png():
-    path = files("ltts") / "web" / "favicon.png"
-    return FileResponse(path, media_type="image/png")
+    path = _dev_static_file("favicon.png") or (files("ltts") / "web" / "favicon.png")
+    return FileResponse(path, media_type="image/png", headers=HTML_NO_CACHE)
 
 
 @app.get("/common.js")
 def common_js():
-    path = files("ltts") / "web" / "common.js"
-    return FileResponse(path, media_type="application/javascript")
+    path = _dev_static_file("common.js") or (files("ltts") / "web" / "common.js")
+    return FileResponse(path, media_type="application/javascript", headers=HTML_NO_CACHE)
+
+
+@app.get("/api/dev/web-rev")
+def api_dev_web_rev():
+    from .web_dev import web_dev_enabled, web_static_rev
+
+    if not web_dev_enabled():
+        raise ApiError(404, "web dev выключен")
+    return {"rev": web_static_rev()}
 
 
 @app.get("/health")

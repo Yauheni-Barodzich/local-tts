@@ -204,6 +204,11 @@ async function pollPlayback() {
 }
 
 const _qs = new URLSearchParams(location.search);
+const previewMode = _qs.has("preview") || _qs.get("preview") === "1";
+if (previewMode) {
+  $("dragpad").style.display = "none";
+  $("single").style.filter = "none";
+}
 function showBundledFallback() {
   const el = $("single");
   el.src = "/assets/avatar-default.png?t=" + Date.now();

@@ -68,6 +68,67 @@
   .spin { animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   label.switch { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 20px;
+    border-bottom: 1px solid var(--border); padding-bottom: 0;
+  }
+  .tab {
+    padding: 10px 14px; margin-bottom: -1px;
+    border: none; border-bottom: 2px solid transparent;
+    background: none; color: var(--muted); cursor: pointer; font: inherit;
+  }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] {
+    color: var(--accent); border-bottom-color: var(--accent); font-weight: 600;
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .avatar-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 820px) {
+    .avatar-layout { grid-template-columns: 1fr; }
+    .avatar-preview-side { justify-self: center; }
+  }
+  .avatar-preview-side { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .avatar-preview-viewport {
+    line-height: 0;
+    background: repeating-conic-gradient(#cbd5e1 0% 25%, #f1f5f9 0% 50%) 50% / 14px 14px;
+  }
+  :root[data-theme="dark"] .avatar-preview-viewport {
+    background: repeating-conic-gradient(#334155 0% 25%, #1e293b 0% 50%) 50% / 14px 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .avatar-preview-viewport {
+      background: repeating-conic-gradient(#334155 0% 25%, #1e293b 0% 50%) 50% / 14px 14px;
+    }
+  }
+  .avatar-preview-viewport iframe {
+    display: block;
+    border: none;
+    background: transparent;
+  }
+  .avatar-preview-caption { font-size: 12px; color: var(--faint); max-width: 220px; line-height: 1.4; }
+  .layout-dialog {
+    border: none; padding: 0; margin: auto;
+    width: min(96vw, 920px); max-height: 90vh;
+    background: var(--surface); color: var(--text);
+    border-radius: var(--r);
+    box-shadow: 0 24px 48px rgba(15, 23, 42, 0.22);
+  }
+  .layout-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+  .layout-dialog-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+  }
+  .layout-dialog-head h2 { margin: 0; font-size: 17px; font-weight: 600; }
+  .layout-dialog iframe {
+    display: block; width: 100%; height: min(78vh, 480px); border: none;
+    background: var(--bg);
+  }
 </style>
 </head>
 <body>
@@ -80,79 +141,118 @@
   </header>
   <div class="error" id="err"></div>
 
-  <section class="card" id="sec-general">
-    <h2>Общее</h2>
-    <p class="mono" id="meta-version"></p>
-    <p class="label">Каталог данных (LTTS_HOME)</p>
-    <p class="mono" id="path-home"></p>
-    <p class="label">Сервер</p>
-    <p class="mono" id="server-url"></p>
-    <div id="env-hints" class="label"></div>
-  </section>
+  <nav class="tabs" role="tablist" aria-label="Разделы настроек">
+    <button type="button" class="tab" role="tab" data-tab="general" aria-selected="true" id="tab-general">Общее</button>
+    <button type="button" class="tab" role="tab" data-tab="voices" aria-selected="false" id="tab-voices">Голоса</button>
+    <button type="button" class="tab" role="tab" data-tab="models" aria-selected="false" id="tab-models">Модели</button>
+    <button type="button" class="tab" role="tab" data-tab="avatar" aria-selected="false" id="tab-avatar">Персонаж</button>
+    <button type="button" class="tab" role="tab" data-tab="pron" aria-selected="false" id="tab-pron">Произношение</button>
+    <button type="button" class="tab" role="tab" data-tab="agents" aria-selected="false" id="tab-agents">Агенты</button>
+  </nav>
 
-  <section class="card">
-    <h2>Голоса по умолчанию</h2>
-    <p class="label">Используются CLI, MCP и API, если голос не указан явно.</p>
-    <div class="field"><div class="label">Русский</div><select id="dv-ru"></select></div>
-    <div class="field"><div class="label">English</div><select id="dv-en"></select></div>
-    <div class="field"><div class="label">Deutsch</div><select id="dv-de"></select></div>
-  </section>
+  <div id="panel-general" class="tab-panel active" role="tabpanel" aria-labelledby="tab-general">
+    <section class="card" id="sec-general">
+      <h2>Общее</h2>
+      <p class="mono" id="meta-version"></p>
+      <p class="label">Каталог данных (LTTS_HOME)</p>
+      <p class="mono" id="path-home"></p>
+      <p class="label">Сервер</p>
+      <p class="mono" id="server-url"></p>
+      <div id="env-hints" class="label"></div>
+    </section>
+  </div>
 
-  <section class="card">
-    <h2>Синтез</h2>
-    <div class="field">
-      <div class="label">Частота по умолчанию (LTTS_RATE / sample_rate)</div>
-      <select id="sample-rate">
-        <option value="">Авто (родная частота движка)</option>
-      </select>
-    </div>
-    <div class="field">
-      <div class="label">Файлов в каталоге out/ (ротация ltts say без -o)</div>
-      <input id="out-keep" type="number" min="0" max="1000" step="1">
-    </div>
-  </section>
+  <div id="panel-voices" class="tab-panel" role="tabpanel" aria-labelledby="tab-voices" hidden>
+    <section class="card">
+      <h2>Голоса по умолчанию</h2>
+      <p class="label">Используются CLI, MCP и API, если голос не указан явно.</p>
+      <div class="field"><div class="label">Русский</div><select id="dv-ru"></select></div>
+      <div class="field"><div class="label">English</div><select id="dv-en"></select></div>
+      <div class="field"><div class="label">Deutsch</div><select id="dv-de"></select></div>
+    </section>
+    <section class="card">
+      <h2>Синтез</h2>
+      <div class="field">
+        <div class="label">Частота по умолчанию (LTTS_RATE / sample_rate)</div>
+        <select id="sample-rate">
+          <option value="">Авто (родная частота движка)</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="label">Файлов в каталоге out/ (ротация ltts say без -o)</div>
+        <input id="out-keep" type="number" min="0" max="1000" step="1">
+      </div>
+    </section>
+  </div>
 
-  <section class="card">
-    <h2>Модели и голоса</h2>
-    <div class="row" style="margin-bottom:12px">
-      <button class="btn" id="verify" type="button">Проверить sha256</button>
-      <button class="btn" id="download-rec" type="button">Скачать рекомендуемый набор</button>
-    </div>
-    <div id="engines-status" class="row" style="margin-bottom:12px"></div>
-    <table><thead><tr><th>Голос</th><th>Язык</th><th>Статус</th><th></th></tr></thead><tbody id="voices-tbody"></tbody></table>
-  </section>
+  <div id="panel-models" class="tab-panel" role="tabpanel" aria-labelledby="tab-models" hidden>
+    <section class="card">
+      <h2>Модели и голоса</h2>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn" id="verify" type="button">Проверить sha256</button>
+        <button class="btn" id="download-rec" type="button">Скачать рекомендуемый набор</button>
+      </div>
+      <div id="engines-status" class="row" style="margin-bottom:12px"></div>
+      <table><thead><tr><th>Голос</th><th>Язык</th><th>Статус</th><th></th></tr></thead><tbody id="voices-tbody"></tbody></table>
+    </section>
+  </div>
 
-  <section class="card" id="sec-avatar">
-    <h2>Персонаж у трея</h2>
-    <p class="label">Показывается в desktop при воспроизведении (прозрачное окно у панели задач).</p>
-    <label class="switch"><input type="checkbox" id="avatar-enabled"> Включить персонажа</label>
-    <div class="field" style="margin-top:12px">
-      <div class="label">Размер окна (px)</div>
-      <input id="avatar-size" type="number" min="80" max="400" step="10" value="160">
-    </div>
-    <div class="row" style="margin-top:12px">
-      <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp">
-      <button class="btn" id="avatar-upload" type="button">Загрузить PNG</button>
-      <a class="btn" href="/avatar-rig">Мастер рига</a>
-      <a class="btn" href="/avatar-layout">Кадр в окне</a>
-    </div>
-    <p class="mono" id="avatar-status"></p>
-  </section>
+  <div id="panel-avatar" class="tab-panel" role="tabpanel" aria-labelledby="tab-avatar" hidden>
+    <section class="card" id="sec-avatar">
+      <h2>Персонаж у трея</h2>
+      <div class="avatar-layout">
+        <div>
+          <p class="label">Показывается в desktop при воспроизведении (прозрачное окно у панели задач).</p>
+          <label class="switch"><input type="checkbox" id="avatar-enabled"> Включить персонажа</label>
+          <div class="field" style="margin-top:12px">
+            <div class="label">Размер окна (px)</div>
+            <input id="avatar-size" type="number" min="80" max="400" step="10" value="160">
+          </div>
+          <div class="row" style="margin-top:12px">
+            <input type="file" id="avatar-file" accept="image/png,image/jpeg,image/webp">
+            <button class="btn" id="avatar-upload" type="button">Загрузить PNG</button>
+            <a class="btn" href="/avatar-rig">Мастер рига</a>
+            <button type="button" class="btn" id="avatar-layout-open">Кадр персонажа</button>
+          </div>
+          <p class="mono" id="avatar-status"></p>
+        </div>
+        <aside class="avatar-preview-side" aria-label="Предпросмотр персонажа">
+          <div class="label">Предпросмотр</div>
+          <div class="avatar-preview-viewport">
+            <iframe id="avatar-preview" title="Итоговый вид в окне у трея" src="/avatar?always=1&amp;preview=1"></iframe>
+          </div>
+          <p class="avatar-preview-caption">Как у трея. Размер — по полю слева; после «Сохранить» или загрузки нажмите «Обновить».</p>
+          <button type="button" class="btn sm" id="avatar-preview-refresh">Обновить</button>
+        </aside>
+      </div>
+    </section>
+  </div>
 
-  <section class="card">
-    <h2>Произношение (Silero ru)</h2>
-    <label class="switch"><input type="checkbox" id="pron-enabled"> Включить словарь</label>
-    <p class="label" id="pron-stats" style="margin-top:10px"></p>
-    <p class="mono" id="pron-dir"></p>
-    <button class="btn" id="pron-reload" type="button" style="margin-top:8px">Перечитать словарь</button>
-  </section>
+  <div id="panel-pron" class="tab-panel" role="tabpanel" aria-labelledby="tab-pron" hidden>
+    <section class="card">
+      <h2>Произношение (Silero ru)</h2>
+      <label class="switch"><input type="checkbox" id="pron-enabled"> Включить словарь</label>
+      <p class="label" id="pron-stats" style="margin-top:10px"></p>
+      <p class="mono" id="pron-dir"></p>
+      <button class="btn" id="pron-reload" type="button" style="margin-top:8px">Перечитать словарь</button>
+    </section>
+  </div>
 
-  <section class="card">
-    <h2>Для агентов и скриптов</h2>
-    <div id="agents-mount"></div>
-  </section>
+  <div id="panel-agents" class="tab-panel" role="tabpanel" aria-labelledby="tab-agents" hidden>
+    <section class="card">
+      <h2>Для агентов и скриптов</h2>
+      <div id="agents-mount"></div>
+    </section>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
+<dialog class="layout-dialog" id="avatar-layout-dialog" aria-labelledby="avatar-layout-title">
+  <div class="layout-dialog-head">
+    <h2 id="avatar-layout-title">Кадр персонажа</h2>
+    <button type="button" class="icon-btn" id="avatar-layout-close" aria-label="Закрыть">✕</button>
+  </div>
+  <iframe id="avatar-layout-frame" title="Редактор кадра персонажа"></iframe>
+</dialog>
 <script>
 const $ = (id) => document.getElementById(id);
 let settings = null;
@@ -251,6 +351,7 @@ async function loadAll() {
   if (av.has_rig) avParts.push("риг");
   if (av.has_image) avParts.push("свой PNG");
   $("avatar-status").textContent = `Режим: ${av.mode || "auto"}${avParts.length ? " · " + avParts.join(", ") : ""}`;
+  syncAvatarPreviewSize();
   fillDefaultSelects();
   renderVoicesTable();
   renderEngines(st);
@@ -275,6 +376,60 @@ function collectPatch() {
   return patch;
 }
 
+function syncAvatarPreviewSize() {
+  const f = $("avatar-preview");
+  if (!f) return;
+  let n = parseInt($("avatar-size").value, 10) || 160;
+  n = Math.min(400, Math.max(80, n));
+  f.style.width = n + "px";
+  f.style.height = n + "px";
+}
+
+function reloadAvatarPreview() {
+  const f = $("avatar-preview");
+  if (!f) return;
+  f.src = "/avatar?always=1&preview=1&_=" + Date.now();
+}
+
+let avatarPreviewStale = true;
+
+$("avatar-size")?.addEventListener("input", syncAvatarPreviewSize);
+$("avatar-preview-refresh")?.addEventListener("click", () => {
+  reloadAvatarPreview();
+  avatarPreviewStale = false;
+});
+
+function openAvatarLayoutDialog() {
+  const dlg = $("avatar-layout-dialog");
+  const frame = $("avatar-layout-frame");
+  if (!dlg || !frame) return;
+  frame.src = "/avatar-layout?embed=1&_=" + Date.now();
+  if (typeof dlg.showModal === "function") dlg.showModal();
+}
+
+function closeAvatarLayoutDialog() {
+  const dlg = $("avatar-layout-dialog");
+  const frame = $("avatar-layout-frame");
+  if (dlg?.open) dlg.close();
+  if (frame) frame.src = "about:blank";
+}
+
+$("avatar-layout-open")?.addEventListener("click", openAvatarLayoutDialog);
+$("avatar-layout-close")?.addEventListener("click", closeAvatarLayoutDialog);
+
+window.addEventListener("message", (ev) => {
+  if (ev.origin !== location.origin) return;
+  if (ev.data?.type !== "ltts-avatar-layout-saved") return;
+  toast("Кадр сохранён");
+  avatarPreviewStale = true;
+  loadAll()
+    .then(() => {
+      reloadAvatarPreview();
+      avatarPreviewStale = false;
+    })
+    .catch(() => {});
+});
+
 $("avatar-upload").onclick = async () => {
   const f = $("avatar-file").files?.[0];
   if (!f) { showErr("Выберите файл"); return; }
@@ -284,7 +439,10 @@ $("avatar-upload").onclick = async () => {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) { showErr(data.detail || r.statusText); return; }
   toast("Изображение загружено");
+  avatarPreviewStale = true;
   await loadAll();
+  reloadAvatarPreview();
+  avatarPreviewStale = false;
 };
 
 $("save").onclick = async () => {
@@ -300,6 +458,11 @@ $("save").onclick = async () => {
     settings = data;
     toast("Сохранено");
     $("err").classList.remove("show");
+    avatarPreviewStale = true;
+    if ($("panel-avatar").classList.contains("active")) {
+      reloadAvatarPreview();
+      avatarPreviewStale = false;
+    }
   } catch (e) {
     showErr(e.message);
   } finally {
@@ -347,8 +510,42 @@ $("pron-reload").onclick = async () => {
   $("pron-stats").textContent = `Слов: ${st.words ?? 0}, фраз: ${st.phrases ?? 0}`;
 };
 
+const TAB_IDS = ["general", "voices", "models", "avatar", "pron", "agents"];
+
+function selectTab(id) {
+  if (!TAB_IDS.includes(id)) id = "general";
+  document.querySelectorAll(".tab[role=tab]").forEach((btn) => {
+    const on = btn.dataset.tab === id;
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  document.querySelectorAll(".tab-panel").forEach((panel) => {
+    const on = panel.id === "panel-" + id;
+    panel.classList.toggle("active", on);
+    panel.hidden = !on;
+  });
+  if (location.hash !== "#" + id) {
+    history.replaceState(null, "", "#" + id);
+  }
+  if (id === "avatar") {
+    syncAvatarPreviewSize();
+    if (avatarPreviewStale) {
+      reloadAvatarPreview();
+      avatarPreviewStale = false;
+    }
+  }
+}
+
+document.querySelectorAll(".tab[role=tab]").forEach((btn) => {
+  btn.addEventListener("click", () => selectTab(btn.dataset.tab));
+});
+window.addEventListener("hashchange", () => {
+  selectTab(location.hash.replace(/^#/, "") || "general");
+});
+
 lttsBindTheme($("theme"));
-loadAll().catch((e) => showErr("Сервер недоступен: " + e.message));
+loadAll()
+  .then(() => selectTab(location.hash.replace(/^#/, "") || "general"))
+  .catch((e) => showErr("Сервер недоступен: " + e.message));
 </script>
 </body>
 </html>

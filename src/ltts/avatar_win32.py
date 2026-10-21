@@ -23,12 +23,8 @@ def exclude_from_taskbar(hwnd: int) -> None:
     user32.SetWindowLongW(hwnd, GWL_EXSTYLE, (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW)
 
 
-def _core_webview2_ready(form: Any) -> bool:
-    wv = getattr(form, "webview", None)
-    return wv is not None and wv.CoreWebView2 is not None
-
-
-def _set_webview2_transparent_bg(wv: Any) -> None:
+def set_webview2_transparent_background(wv: Any) -> None:
+    """WebView2 WinForms + CoreWebView2: DefaultBackgroundColor = Color.Transparent."""
     try:
         from System.Drawing import Color
 
@@ -52,11 +48,10 @@ def _set_webview2_transparent_bg(wv: Any) -> None:
 
 
 def enable_avatar_transparency(form: Any) -> None:
-    """Прозрачность после CoreWebView2. Без WS_EX_LAYERED — иначе клики проходят сквозь окно."""
-    if not _core_webview2_ready(form):
-        return
-    wv = form.webview
-    _set_webview2_transparent_bg(wv)
+    """Прозрачность WebView2 и формы. Без WS_EX_LAYERED — иначе клики проходят сквозь окно."""
+    wv = getattr(form, "webview", None)
+    if wv is not None:
+        set_webview2_transparent_background(wv)
     try:
         from System.Drawing import Color
 
